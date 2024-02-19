@@ -6,4 +6,5 @@ git commit -m %message%
 git branch -M main
 git remote add origin https://github.com/HOR-163/Rocket-Game.git
 git push -u origin main
-timeout /t 30 /nobreak
+echo \033[32mDone!
+pause

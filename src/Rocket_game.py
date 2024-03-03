@@ -1,6 +1,7 @@
 # Gravity, physics: https://www.youtube.com/watch?v=5j0uU3aJxJM
 # Camera control: https://www.youtube.com/watch?v=u7LPRqrzry8
 # Collisions: https://www.youtube.com/watch?v=tJiKYMQJnYg
+# Background scrolling/tiling: https://youtu.be/ARt6DLP38-Y
 
 import pygame, math, os
 import time

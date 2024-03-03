@@ -1,4 +1,6 @@
-#Gravity, physics: https://www.youtube.com/watch?v=5j0uU3aJxJM
+# Gravity, physics: https://www.youtube.com/watch?v=5j0uU3aJxJM
+# Camera control: https://www.youtube.com/watch?v=u7LPRqrzry8
+# Collisions: https://www.youtube.com/watch?v=tJiKYMQJnYg
 
 import pygame, math, os
 

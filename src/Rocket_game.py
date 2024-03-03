@@ -3,6 +3,7 @@
 # Collisions: https://www.youtube.com/watch?v=tJiKYMQJnYg
 
 import pygame, math, os
+import time
 
 #Initialize the pygame module
 pygame.init()
@@ -16,8 +17,9 @@ timer = pygame.time.Clock()
 
 # load the rocket image
 path = os.getcwd()
-path = path[:path.rfind("\\") + 1]
-rocket_image_og = pygame.image.load(path + "images\\rocket1.png").convert_alpha()
+#path = path[:path.rfind("\\") + 1]
+print(path)
+rocket_image_og = pygame.image.load(path + "\\images\\rocket1.png").convert_alpha()
 
 # Set some global variables for the rockets
 gravity = 0.2
@@ -100,9 +102,11 @@ def print_debug_info(last_speed_x, last_speed_y):
              font.render(f"y-position: {y_position}", True, 'blue', 'white'),
              font.render(f"x-speed: {-x_speed}", True, 'red', 'white'),
              font.render(f"y-speed: {-y_speed}", True, 'blue', 'white'),
+             font.render(f"Actual speed: {round(math.sqrt(x_speed**2 + y_speed**2),3)}", True, 'black', 'white'),
              font.render(f"x-acceleration: {-x_acc}", True, 'red', 'white'),
              font.render(f"y-acceleration: {-y_acc}", True, 'blue', 'white'),
-             font.render(f"Angle: {-angle}", True, 'red', 'white')
+             font.render(f"Angle: {-angle}", True, 'red', 'white'),
+             font.render(f"FPS: {round(1000000000/(deltatime), 3)}", True, 'black', 'white')
              ]
     for index, text in enumerate(texts):
         screen.blit(text,(0,index * 16))
@@ -111,22 +115,42 @@ def print_debug_info(last_speed_x, last_speed_y):
 
 # main loop
 run = True
+
+time1, time2 = 0,0
+deltatime = 160000000
+times = []
+
 while run:
+    # For FPS counter
+    times.append(time2 - time1)
+    if len(times) == 5:
+        deltatime = sum(times) / 5
+        times = []
+    time1 = time.perf_counter_ns()
+
+    # Apply running fps and fill in the background
     timer.tick(fps)
     screen.fill(background_color)
 
+    # Run the main code in the rocket object
     rocket1.update()
 
-    if not first:
-        print_debug_info(last_speed_x, last_speed_y)
-    first = False
-    last_speed_x, last_speed_y = rocket1.x_speed, rocket1.y_speed
-    
+    # Read hid inputs
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
 
+    # For debug info
+    if not first:
+        print_debug_info(last_speed_x, last_speed_y)
+    first = False
+    last_speed_x, last_speed_y = rocket1.x_speed, rocket1.y_speed
+
+    # Draw things on the screen
     pygame.display.flip()
+
+    # For FPS counter
+    time2 = time.perf_counter_ns()
 pygame.quit()
             
     

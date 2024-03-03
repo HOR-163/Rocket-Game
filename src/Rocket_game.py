@@ -19,7 +19,7 @@ timer = pygame.time.Clock()
 # load the rocket image
 path = os.getcwd()
 #For IDLE
-path = path[:path.rfind("\\") + 1]
+#path = path[:path.rfind("\\") + 1]
 rocket_image_og = pygame.image.load(path + "\\images\\rocket1.png").convert_alpha()
 
 # Set some global variables for the rockets

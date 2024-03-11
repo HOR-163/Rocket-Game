@@ -27,6 +27,8 @@ rocket_image_og = pygame.image.load(path + "\\images\\rocket1.png").convert_alph
 # Set some global variables for the rockets
 gravity = 0.2
 max_falling_speed = 10
+global scale
+scale = 1
 
 # Just some random stuff
 background_color = (176, 235, 230)
@@ -34,12 +36,12 @@ font = pygame.font.SysFont('consolas', 15)
 
 
 class Rocket:
-    def __init__(self, x_pos, y_pos, acceleration, boost, id):
+    def __init__(self, x_pos, y_pos, acceleration, boost, max_speed):
         self.x_pos = x_pos
         self.y_pos = y_pos
         self.acceleration = acceleration
         self.boost = boost
-        self.id = id
+        self.max_speed = max_speed
         self.angle = 0
         self.x_speed = 0
         self.y_speed = 0
@@ -67,7 +69,7 @@ class Rocket:
         # Pressing left, so rotate rocket counter-clockwise
         elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.angle += 0.5
-
+        global scale
         #Pressing the "R" key, resets everything
         if keys[pygame.K_r]:
             self.x_pos = WIDTH / 2
@@ -75,57 +77,77 @@ class Rocket:
             self.x_speed = 0
             self.y_speed = 0
             self.angle = 0
+            scale = 1
+
+        if keys[pygame.K_e]:
+            scale += 0.01
+        elif keys[pygame.K_q]:
+            if scale >= 0.1:
+                scale -= 0.01
+            
 
     """ Update the rockets position """
     def update(self):
+        # Read keyboard inputs, calculate speeds
         self.input()
-        self.x_pos -= self.x_speed
-        self.y_pos += self.y_speed
+
+        # Limit the speeds to be in range of maximum speed
+        total_speed = math.sqrt(self.x_speed ** 2 + self.y_speed ** 2)
+        if total_speed > self.max_speed:
+            self.x_speed = self.max_speed / total_speed * self.x_speed
+            self.y_speed = self.max_speed / total_speed * self.y_speed
+        
+        self.x_pos -= self.x_speed * scale
+        self.y_pos += self.y_speed * scale
 
         # Put the image in the centre of our imaginary "position point" aka when rotating the rocket
         # it rotates from the center, not from the upper left corenr of the image (sprite)
         # Always draw the rocket in the center of the screen (maybe change later)
-        rocket_image = pygame.transform.rotate(rocket_image_og, self.angle)
-        rocket_image_rect = rocket_image.get_rect(center = (WIDTH/2, HEIGHT/2))
-        screen.blit(rocket_image, rocket_image_rect)
-        #pygame.draw.circle(screen, 'red', (500,375), 1)
+        # Also apply scale to the rocket
+        rocket_image_scaled = pygame.transform.scale(rocket_image_og, (50 * scale, 100 * scale))
+        rocket_image_scaled_and_rotated = pygame.transform.rotate(rocket_image_scaled, self.angle)
+        rocket_image_rect = rocket_image_scaled_and_rotated.get_rect(center = (WIDTH/2, HEIGHT/2))
+        screen.blit(rocket_image_scaled_and_rotated, rocket_image_rect)
+        #pygame.draw.circle(screen, 'red', (WIDTH // 2, HEIGHT // 2), 1) # To find the center of the screen
 
 """Handle background chunks"""
 class Background:
-    def __init__(self, load_x, load_y):
+    def __init__(self, load_x: int, load_y: int):
         # how many chunks to load (e.g 3x3 amount of chunks)
         self.load_x = load_x
         self.load_y = load_y
         
-    def update(self, x_pos, y_pos):
-        # x and y positions are reversed
-        scale_x = 1
-        scale_y = 1
-        chunk_y = -y_pos // (HEIGHT * scale_x) + 1
-        chunk_x = x_pos // (WIDTH * scale_y)
-
-        for x in range(self.load_x):
-            for y in range (self.load_y):
-                # Draw chunk borders 
-                #screen.blit(background_image, ((chunk_x + x - self.load_x // 2) * WIDTH - x_pos - WIDTH // 2,
-                                               #(-chunk_y + y -self.load_y //2) * HEIGHT - y_pos + HEIGHT // 2))
-                pygame.draw.rect(screen, 'black', pygame.Rect(
-                                                (chunk_x + x + 1 - self.load_x // 2) * WIDTH * 1 - x_pos - WIDTH // 2, # box's top left corners x-coordinate
-                                                (-chunk_y + y - self.load_y // 2) * HEIGHT * 1 - y_pos + HEIGHT // 2, # box's top left corners y-coordinate
-                                                WIDTH * scale_x, HEIGHT * scale_y), # Box size
-                                1) # Border width
-                # Draw chunk texts
-                chunk_data = font.render(f"{int(chunk_x)} {int(chunk_y)}", True, 'black', 'white')
-                screen.blit(chunk_data, (int(chunk_x + x - self.load_x // 2) * WIDTH - x_pos, (-chunk_y + y -self.load_y //2) * HEIGHT - y_pos))
+    def update(self, x_pos, y_pos) -> [int, int]:
+        # y positions are reversed
+        # works to some extent
+        """TODO: don't change the scale from world origin but from the ogirin of the rocket and fix the font renderer"""
+        C_WIDTH = WIDTH // 2
+        C_HEIGHT = HEIGHT // 2
+        chunk_x = int((x_pos - (WIDTH - C_WIDTH * scale) / 2) // (C_WIDTH * scale))
+        chunk_y = int((-y_pos + (HEIGHT - C_HEIGHT * scale) / 2) // (C_HEIGHT * scale) + 1)
+        for x_chunk_offset in range(chunk_x - self.load_x // 2, chunk_x + self.load_x // 2 + 1):
+            for y_chunk_offset in range(chunk_y - self.load_y // 2, chunk_y + self.load_y // 2 + 1):
+                pygame.draw.rect(screen, 'red', pygame.Rect(-x_pos + (WIDTH - C_WIDTH * scale) / 2 + x_chunk_offset * C_WIDTH * scale + WIDTH / 2,
+                                                            -y_pos + (HEIGHT - C_HEIGHT * scale)  / 2 - y_chunk_offset * C_HEIGHT * scale + HEIGHT / 2,
+                                                            C_WIDTH * scale, C_HEIGHT * scale), 1)
+                screen.blit(font.render(f"{x_chunk_offset}, {y_chunk_offset}", True, 'black', 'white'),
+                            (-x_pos + (WIDTH - C_WIDTH * scale) / 2 + x_chunk_offset * C_WIDTH * scale + WIDTH / 2 + C_WIDTH * scale / 2,
+                            -y_pos - (HEIGHT - C_HEIGHT * scale)  / 2 - y_chunk_offset * C_HEIGHT * scale + HEIGHT / 2 + C_HEIGHT * scale / 2))
         
-        
+        return [chunk_x, chunk_y]
 
-rocket1 = Rocket(500, 375, 0.1, 0.2, 1)
-background = Background(3,3)
+
+
+#                 start_x,  start_y,     acceleration,
+#                    |         |         |    boost acceleration,
+#                    |         |         |    |   maximum speed
+#                    |         |         |    |   |
+rocket1 = Rocket(WIDTH / 2, HEIGHT / 2, 0.1, 0.2, 20)
+background = Background(5,5)
 
 
 first = True
-def print_debug_info(last_speed_x, last_speed_y):
+def print_debug_info(last_speed_x, last_speed_y, chunk_x, chunk_y):
     x_position = round(rocket1.x_pos, 3)
     y_position = round(rocket1.y_pos, 3)
     x_speed = round(rocket1.x_speed, 3)
@@ -135,7 +157,7 @@ def print_debug_info(last_speed_x, last_speed_y):
     angle = round(rocket1.angle, 3)
     texts = [font.render(f"x-position: {x_position}", True, 'red', 'white'),
              font.render(f"y-position: {y_position}", True, 'blue', 'white'),
-             font.render(f"Chunk based position: {int(rocket1.x_pos // WIDTH + 1)} {int(-rocket1.y_pos // HEIGHT + 1)}", True, 'black', 'white'),
+             font.render(f"Chunk based position: {chunk_x} {chunk_y}", True, 'black', 'white'),
              font.render(f"x-speed: {-x_speed}", True, 'red', 'white'),
              font.render(f"y-speed: {-y_speed}", True, 'blue', 'white'),
              font.render(f"Actual speed: {round(math.sqrt(x_speed**2 + y_speed**2),3)}", True, 'black', 'white'),
@@ -169,7 +191,7 @@ while run:
     screen.fill(background_color)
 
     # Run the main code in the rocket object
-    background.update(rocket1.x_pos, rocket1.y_pos)
+    chunk_coord = background.update(rocket1.x_pos, rocket1.y_pos)
     rocket1.update()
 
     # Read hid inputs
@@ -179,7 +201,7 @@ while run:
 
     # For debug info
     if not first:
-        print_debug_info(last_speed_x, last_speed_y)
+        print_debug_info(last_speed_x, last_speed_y, chunk_coord[0], chunk_coord[1])
     first = False
     last_speed_x, last_speed_y = rocket1.x_speed, rocket1.y_speed
 

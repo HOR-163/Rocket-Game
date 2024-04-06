@@ -28,15 +28,32 @@ path = os.getcwd()
 rocket_image_og = pygame.image.load(path + "\\images\\rocket1.png").convert_alpha()
 
 # Set some global variables for the rockets
-max_falling_speed = 600
 scale = 1
 
 #Define the debug font
 debug_font = pygame.font.SysFont('consolas', 15)
 
+class CollisionPoint:
+    def __init__(self, coordinates: list):
+        self.x_offset = coordinates[0]
+        self.y_offset = coordinates[1]
+        self.x_pos = 0
+        self.y_pos = 0
+        self.radius = math.sqrt(pow(coordinates[0], 2) + pow(coordinates[1], 2))
+    
+    @property
+    def screen_position(self) -> tuple[float, float]:
+        return (self.x_pos, self.y_pos)
+
+    def update(self, angle: float, screen_x_offset: int, screen_y_offset: int) -> tuple[float, float]:
+        angle = math.radians(angle) + math.atan2(self.y_offset, self.x_offset)
+        self.x_pos = screen_x_offset + self.radius * math.cos(angle) * scale
+        self.y_pos = screen_y_offset - self.radius * math.sin(angle) * scale
+        return self.screen_position
+    
 
 class Rocket:
-    def __init__(self, x_pos, y_pos, acceleration, boost, max_speed):
+    def __init__(self, x_pos, y_pos, acceleration, boost, max_speed, collision_points):
         self.x_pos = x_pos
         self.y_pos = y_pos
         self.acceleration = acceleration
@@ -45,6 +62,11 @@ class Rocket:
         self.angle = 0
         self.x_speed = 0
         self.y_speed = 0
+        self.collision_points = []
+        for point in collision_points:
+            self.collision_points.append(CollisionPoint(point))
+        
+
         
     """ Keyboard input handling and accelerationa and speed physics """
     def input(self):
@@ -55,7 +77,7 @@ class Rocket:
             self.x_speed += math.cos(math.radians(self.angle - 90)) * self.boost
             self.y_speed += math.sin(math.radians(self.angle - 90)) * self.boost
         # Pressing down, so no acceleration
-        elif (keys[pygame.K_DOWN] or keys[pygame.K_s]) and self.y_speed <= max_falling_speed:
+        elif (keys[pygame.K_DOWN] or keys[pygame.K_s]) and self.y_speed <= FALL_SPEED:
             self.y_speed += GRAVITY
         # Pressing nothing, so we have to add acceleration
         else:
@@ -110,10 +132,13 @@ class Rocket:
             self.y_speed = self.max_speed / air_speed * self.y_speed
         
         self.x_pos -= self.x_speed * dt
+        self.y_pos += self.y_speed * dt
 
-        """TODO: Add proper collision detection with ground at least at the moment"""
 
-        # You are in air, yippie!
+
+        """TODO: Add proper collision detection with ground"""
+
+        """ # You are in air, yippie!
         if (self.y_pos < 500):
             self.y_pos += self.y_speed * dt
         # You are in the ground, but it's fine rn
@@ -123,27 +148,34 @@ class Rocket:
         # You went too far into the gorund, time to raise you up
         else:
             self.y_speed = self.y_speed / 10
-            self.y_pos = 499
+            self.y_pos = 499 """
 
 
         # Put the image in the centre of our imaginary "position point" aka when rotating the rocket
         # it rotates from the center, not from the upper left corner of the image (sprite)
         # Also apply scale to the rocket
-        x_img_offset = cubic_bezier(0,0,50,0,50,100,100,100, self.x_speed / self.max_speed) #,screen position=(WIDTH - 100, HEIGHT - 100))
-        y_img_offset = cubic_bezier(0,0,50,0,50,100,100,100, self.y_speed / self.max_speed) #,screen color='blue',position=(WIDTH - 100, HEIGHT- 200))
+        x_img_offset = cubic_bezier(0,0,50,0,50,100,100,100, self.x_speed / self.max_speed) #,screen, position=(WIDTH - 100, HEIGHT - 100))
+        y_img_offset = cubic_bezier(0,0,50,0,50,100,100,100, self.y_speed / self.max_speed) #,screen, color='blue',position=(WIDTH - 100, HEIGHT- 200))
         img_x = WIDTH / 2 - x_img_offset * WIDTH / 200
         img_y = HEIGHT / 2 + y_img_offset * HEIGHT / 200
         #print(x_offset_amount, y_offset_amount)
-
+        
         rocket_image_scaled = pygame.transform.scale(rocket_image_og, (50 * scale, 100 * scale))
         rocket_image_scaled_and_rotated = pygame.transform.rotate(rocket_image_scaled, self.angle)
         rocket_image_rect = rocket_image_scaled_and_rotated.get_rect(center = (img_x, img_y))
         screen.blit(rocket_image_scaled_and_rotated, rocket_image_rect)
-        
+
+        for index, point in enumerate(self.collision_points):
+            pygame.draw.circle(screen, COLORS[index % 8], point.update(self.angle, img_x, img_y), 2)
+        print(self.collision_points[2].screen_position[1] + img_y + self.y_pos - HEIGHT)
+
+
+        pygame.draw.circle(screen, "white", (img_x, img_y), 2)
+
         #pygame.draw.circle(screen, 'red', (WIDTH // 2, HEIGHT // 2), 1) # To find the center of the screen
         return air_speed
 
-"""Handle background chunks"""
+"""Handle background"""
 class Background:
     def __init__(self, load_x: int, load_y: int):
         # how many chunks to load (e.g 3x3 amount of chunks)
@@ -151,6 +183,7 @@ class Background:
         self.load_y = load_y
         
     def update(self, x_pos, y_pos):
+        # TODO: convert chunks to objects to check collision with ground maybe?
         chunk_x = int((x_pos - (WIDTH - C_WIDTH) / 2) // C_WIDTH)
         chunk_y = int((-y_pos + (HEIGHT - C_HEIGHT) / 2) // C_HEIGHT + 1)
 
@@ -186,12 +219,14 @@ class Background:
         return [chunk_x, chunk_y]
 
 
-
+# Points on the corners of the rocket (size in px, coords origin is the center of the rocket)
+collision_points = [[-25,50],[25,50],[-25,-50],[25,-50]]
 #                 start_x,  start_y,    acceleration,
 #                    |         |        |  boost acceleration,
 #                    |         |        |  |   maximum speed
-#                    |         |        |  |   |
-rocket1 = Rocket(WIDTH / 2, HEIGHT / 2, 4, 8, 2000)
+#                    |         |        |  |   |    points for collision
+#                    |         |        |  |   |    |
+rocket1 = Rocket(WIDTH / 2, HEIGHT / 2, 4, 8, 2000, collision_points)
 background = Background(5,5)
 
 
@@ -227,12 +262,14 @@ time1, time2 = 0,0
 
 while run:
     # For FPS counter
-    dt = (time.perf_counter() - time1) / 1_000_000_000 # Because it is in nanoseconds
-    time1 = time.perf_counter()
+    dt = (time.perf_counter_ns() - time1) / 1_000_000_000 # Because it is in nanoseconds
+    time1 = time.perf_counter_ns()
+    #print(1/dt)
 
 
     # Apply running fps and fill in the background
     dt = timer.tick(fps) * 0.001
+    #timer.tick(fps)
     screen.fill(SKY_COLOR)
 
     # Update background

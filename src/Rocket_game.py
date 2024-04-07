@@ -65,9 +65,7 @@ class Rocket:
         self.collision_points = []
         for point in collision_points:
             self.collision_points.append(CollisionPoint(point))
-        
 
-        
     """ Keyboard input handling and accelerationa and speed physics """
     def input(self):
         keys = pygame.key.get_pressed()
@@ -119,6 +117,8 @@ class Rocket:
         # Unlimited fps
         elif keys[pygame.K_4]:
             fps = 0
+        elif keys[pygame.K_0]:
+            fps = 1
 
     """ Update the rockets position """
     def update(self):
@@ -135,42 +135,41 @@ class Rocket:
         self.y_pos += self.y_speed * dt
 
 
-
-        """TODO: Add proper collision detection with ground"""
-
-        """ # You are in air, yippie!
-        if (self.y_pos < 500):
-            self.y_pos += self.y_speed * dt
-        # You are in the ground, but it's fine rn
-        elif self.y_pos < 500 and self.y_pos > 502:
-            self.y_pos -= self.y_speed * dt
-            self.y_speed = self.y_speed / 10
-        # You went too far into the gorund, time to raise you up
-        else:
-            self.y_speed = self.y_speed / 10
-            self.y_pos = 499 """
-
-
-        # Put the image in the centre of our imaginary "position point" aka when rotating the rocket
+        # Put the image in the center of our imaginary "position point" aka when rotating the rocket
         # it rotates from the center, not from the upper left corner of the image (sprite)
         # Also apply scale to the rocket
+
+        img_width = rocket_image_og.get_width()
+        img_height = rocket_image_og.get_height()
+
         x_img_offset = cubic_bezier(0,0,50,0,50,100,100,100, self.x_speed / self.max_speed) #,screen, position=(WIDTH - 100, HEIGHT - 100))
         y_img_offset = cubic_bezier(0,0,50,0,50,100,100,100, self.y_speed / self.max_speed) #,screen, color='blue',position=(WIDTH - 100, HEIGHT- 200))
-        img_x = WIDTH / 2 - x_img_offset * WIDTH / 200
-        img_y = HEIGHT / 2 + y_img_offset * HEIGHT / 200
-        #print(x_offset_amount, y_offset_amount)
+        img_x = WIDTH / 2 - x_img_offset * WIDTH / (2 * 100)
+        img_y = HEIGHT / 2 + y_img_offset * HEIGHT / (2 * 100)
+
+        # print(x_offset_amount, y_offset_amount)
+
+        lowest = []
+        for index, point in enumerate(self.collision_points):
+            pygame.draw.circle(screen, COLORS[index % 8], point.update(self.angle, img_x, img_y), 2)
+            point_y_position = point.screen_position[1]
+            if len(lowest) == 0 or lowest[1] < point_y_position:
+                lowest = [point, point_y_position]
+
+        # If the lowest point intersects with ground
+        if -(HEIGHT / 2 - self.y_pos - lowest[0].screen_position[1]) >= HEIGHT / 2 + C_HEIGHT / 2 * scale:
+            pygame.draw.circle(screen, "red", lowest[0].screen_position, 3)
+            print(HEIGHT + C_HEIGHT / 2 - self.y_pos - lowest[0].screen_position[1])
+            self.y_pos += HEIGHT + C_HEIGHT*scale / 2 - self.y_pos - lowest[0].screen_position[1]
+            self.x_speed = self.x_speed - self.x_speed / 100
+            self.y_speed = 0
+
+        pygame.draw.circle(screen, "white", (img_x, img_y), 2)
         
-        rocket_image_scaled = pygame.transform.scale(rocket_image_og, (50 * scale, 100 * scale))
+        rocket_image_scaled = pygame.transform.scale(rocket_image_og, (img_width * scale, img_height * scale))
         rocket_image_scaled_and_rotated = pygame.transform.rotate(rocket_image_scaled, self.angle)
         rocket_image_rect = rocket_image_scaled_and_rotated.get_rect(center = (img_x, img_y))
         screen.blit(rocket_image_scaled_and_rotated, rocket_image_rect)
-
-        for index, point in enumerate(self.collision_points):
-            pygame.draw.circle(screen, COLORS[index % 8], point.update(self.angle, img_x, img_y), 2)
-        print(self.collision_points[2].screen_position[1] + img_y + self.y_pos - HEIGHT)
-
-
-        pygame.draw.circle(screen, "white", (img_x, img_y), 2)
 
         #pygame.draw.circle(screen, 'red', (WIDTH // 2, HEIGHT // 2), 1) # To find the center of the screen
         return air_speed

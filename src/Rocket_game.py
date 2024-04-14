@@ -6,11 +6,14 @@
 
 """Start of the actual program"""
 import pygame
-import math
+# For antialiasing one day (maybe)
+#import pygame.gfxdraw
+from math import *
 import os
 import time
 from CONSTANTS import *
 from bezier import *
+from coordinate_systems import *
 
 #Initialize the pygame module and attributes that are related to it
 pygame.init()
@@ -39,16 +42,16 @@ class CollisionPoint:
         self.y_offset = coordinates[1]
         self.x_pos = 0
         self.y_pos = 0
-        self.radius = math.sqrt(pow(coordinates[0], 2) + pow(coordinates[1], 2))
+        self.radius = sqrt(pow(coordinates[0], 2) + pow(coordinates[1], 2))
     
     @property
     def screen_position(self) -> tuple[float, float]:
         return (self.x_pos, self.y_pos)
 
     def update(self, angle: float, screen_x_offset: int, screen_y_offset: int) -> tuple[float, float]:
-        angle = math.radians(angle) + math.atan2(self.y_offset, self.x_offset)
-        self.x_pos = screen_x_offset + self.radius * math.cos(angle) * scale
-        self.y_pos = screen_y_offset - self.radius * math.sin(angle) * scale
+        angle = radians(angle) + atan2(self.y_offset, self.x_offset)
+        self.x_pos = screen_x_offset + self.radius * cos(angle) * scale
+        self.y_pos = screen_y_offset - self.radius * sin(angle) * scale
         return self.screen_position
     
 
@@ -66,21 +69,21 @@ class Rocket:
         for point in collision_points:
             self.collision_points.append(CollisionPoint(point))
 
-    """ Keyboard input handling and accelerationa and speed physics """
     def input(self):
+        """ Keyboard input handling, acceleration and speed physics."""
         keys = pygame.key.get_pressed()
 
         # Pressing up so add boost
         if keys[pygame.K_UP] or keys[pygame.K_w]:
-            self.x_speed += math.cos(math.radians(self.angle - 90)) * self.boost
-            self.y_speed += math.sin(math.radians(self.angle - 90)) * self.boost
+            self.x_speed += cos(radians(self.angle - 90)) * self.boost
+            self.y_speed += sin(radians(self.angle - 90)) * self.boost
         # Pressing down, so no acceleration
         elif (keys[pygame.K_DOWN] or keys[pygame.K_s]) and self.y_speed <= FALL_SPEED:
             self.y_speed += GRAVITY
         # Pressing nothing, so we have to add acceleration
         else:
-            self.x_speed += math.cos(math.radians(self.angle - 90)) * self.acceleration
-            self.y_speed += math.sin(math.radians(self.angle - 90)) * self.acceleration
+            self.x_speed += cos(radians(self.angle - 90)) * self.acceleration
+            self.y_speed += sin(radians(self.angle - 90)) * self.acceleration
             
         
         # Pressing right, so rotate rocket clockwise
@@ -120,13 +123,13 @@ class Rocket:
         elif keys[pygame.K_0]:
             fps = 1
 
-    """ Update the rockets position """
     def update(self):
+        """ Update the rockets position."""
         # Read keyboard inputs, calculate speeds
         self.input()
 
         # Limit the speeds to be in range of maximum speed
-        air_speed = math.sqrt(self.x_speed ** 2 + self.y_speed ** 2)
+        air_speed = sqrt(self.x_speed ** 2 + self.y_speed ** 2)
         if air_speed > self.max_speed:
             self.x_speed = self.max_speed / air_speed * self.x_speed
             self.y_speed = self.max_speed / air_speed * self.y_speed
@@ -149,20 +152,26 @@ class Rocket:
 
         # print(x_offset_amount, y_offset_amount)
 
-        lowest = []
+        lowest = None
         for index, point in enumerate(self.collision_points):
             pygame.draw.circle(screen, COLORS[index % 8], point.update(self.angle, img_x, img_y), 2)
             point_y_position = point.screen_position[1]
-            if len(lowest) == 0 or lowest[1] < point_y_position:
-                lowest = [point, point_y_position]
+            if lowest is None or lowest.screen_position[1] < point_y_position:
+                lowest = point
 
         # If the lowest point intersects with ground
-        if -(HEIGHT / 2 - self.y_pos - lowest[0].screen_position[1]) >= HEIGHT / 2 + C_HEIGHT / 2 * scale:
+        if screen_to_world_coordinates((None, lowest.screen_position[1]), self.position, scale)[1] > HEIGHT / 2 + C_HEIGHT / 2:
+            pygame.draw.circle(screen, "green", lowest.screen_position, 5)
+            self.y_pos += (world_to_screen_coordinates((None, HEIGHT / 2 + C_HEIGHT / 2 + 2), self.position, scale)[1] - lowest.screen_position[1])
+            self.x_speed = self.x_speed - self.x_speed * GROUND_FRICTION
+            self.y_speed = 0 
+
+        """ if -(HEIGHT - self.y_pos - lowest[0].screen_position[1]) >= C_HEIGHT/ 2:
             pygame.draw.circle(screen, "red", lowest[0].screen_position, 3)
-            print(HEIGHT + C_HEIGHT / 2 - self.y_pos - lowest[0].screen_position[1])
-            self.y_pos += HEIGHT + C_HEIGHT*scale / 2 - self.y_pos - lowest[0].screen_position[1]
+            #print(HEIGHT + C_HEIGHT / 2 - self.y_pos - lowest[0].screen_position[1])
+            self.y_pos += HEIGHT + C_HEIGHT / 2 - self.y_pos - lowest[0].screen_position[1]
             self.x_speed = self.x_speed - self.x_speed / 100
-            self.y_speed = 0
+            self.y_speed = 0 """
 
         pygame.draw.circle(screen, "white", (img_x, img_y), 2)
         
@@ -174,6 +183,11 @@ class Rocket:
         #pygame.draw.circle(screen, 'red', (WIDTH // 2, HEIGHT // 2), 1) # To find the center of the screen
         return air_speed
 
+    @property
+    def position(self):
+        return (self.x_pos, self.y_pos)
+    
+
 """Handle background"""
 class Background:
     def __init__(self, load_x: int, load_y: int):
@@ -181,41 +195,44 @@ class Background:
         self.load_x = load_x
         self.load_y = load_y
         
-    def update(self, x_pos, y_pos):
-        # TODO: convert chunks to objects to check collision with ground maybe?
-        chunk_x = int((x_pos - (WIDTH - C_WIDTH) / 2) // C_WIDTH)
-        chunk_y = int((-y_pos + (HEIGHT - C_HEIGHT) / 2) // C_HEIGHT + 1)
+    def update(self, rocket_position: tuple[float, float]):
 
+        chunk_x = int((rocket_position[0] - (WIDTH - C_WIDTH) // 2) // C_WIDTH)
+        chunk_y = int((-rocket_position[1] + (HEIGHT - C_HEIGHT) // 2) // C_HEIGHT)
 
         for x_offset in range(int(-self.load_x / 2), int(self.load_x / 2) + 1):
             for y_offset in range(int(-self.load_y / 2), int(self.load_y / 2) + 1):
-                # Find the center origin of scale
-                center_x = ((WIDTH - C_WIDTH) * scale + WIDTH) / 2
-                center_y = ((HEIGHT - C_HEIGHT) * scale + HEIGHT) / 2
+
+                world_x = (WIDTH - C_WIDTH) // 2 + C_WIDTH * (x_offset + chunk_x)
+                world_y = (HEIGHT - C_HEIGHT) // 2 + C_HEIGHT * (y_offset + chunk_y)
+
+                chunk_screen_coordinates = world_to_screen_coordinates((world_x, -world_y), rocket_position, scale)
 
                 # Draw the rectangles
-                pygame.draw.rect(screen, 'red', pygame.Rect(
-                    (-x_pos + (chunk_x + x_offset) * C_WIDTH) * scale + center_x, 
-                    (-y_pos - (chunk_y + y_offset) * C_HEIGHT) * scale + center_y, 
-                    math.ceil(C_WIDTH * scale), math.ceil(C_HEIGHT * scale)), 1) # Has to be ceil, otherwise seams will appear
+                if chunk_y + y_offset >= -1:
+                    pygame.draw.rect(screen, 'red', pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
+                                                                ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)), 1)
 
                 # Draw the ground
-                if chunk_y + y_offset < 0:
-                    pygame.draw.rect(screen, GROUND_COLOR , pygame.Rect(
-                    (-x_pos + (chunk_x + x_offset) * C_WIDTH) * scale + center_x, 
-                    (-y_pos - (chunk_y + y_offset) * C_HEIGHT) * scale + center_y, 
-                    math.ceil(C_WIDTH * scale), math.ceil(C_HEIGHT * scale))) # Has to be ceil, otherwise seams will appear
+                elif chunk_y + y_offset < -1:
+                    pygame.draw.rect(screen, GROUND_COLOR , pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
+                                                                        ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)))
                 
                 # Create and find the size (length, height) of chunk text (mainly for debugging)
-                coord_text = f"{chunk_x + x_offset} {chunk_y + y_offset}"
-                coord_text_font_object = debug_font.render(coord_text, True, 'black', 'white')
-                coord_text_size_x, coord_text_size_y = debug_font.size(coord_text)
+                chunk_coordinates_str = f"{chunk_x + x_offset} {chunk_y + y_offset}"
+                chunk_coordinates_rendered = debug_font.render(chunk_coordinates_str, True, 'black', 'white')
+                chunk_coordinates_str_size = debug_font.size(chunk_coordinates_str)
+                chunk_coordinates_str_coordinates = world_to_screen_coordinates((WIDTH // 2 + C_WIDTH * (x_offset + chunk_x), -(HEIGHT // 2 + C_HEIGHT * (y_offset + chunk_y - 1))), rocket_position, scale)
+                chunk_coordinates_str_coordinates = (chunk_coordinates_str_coordinates[0] - chunk_coordinates_str_size[0] / 2, chunk_coordinates_str_coordinates[1] - chunk_coordinates_str_size[1] / 2)
 
                 # Write the chunk coordinates to the screen (uses basically the same equations like in background drawing)
-                screen.blit(coord_text_font_object, ((-x_pos + C_WIDTH / 2 + (chunk_x + x_offset) * C_WIDTH) * scale + center_x - coord_text_size_x / 2, 
-                                            (-y_pos  + C_HEIGHT / 2 - (chunk_y + y_offset) * C_HEIGHT) * scale + center_y - coord_text_size_y / 2))
+                screen.blit(chunk_coordinates_rendered, chunk_coordinates_str_coordinates)
+
         # For debugging
-        return [chunk_x, chunk_y]
+        return (chunk_x, chunk_y)
+
+
+
 
 
 # Points on the corners of the rocket (size in px, coords origin is the center of the rocket)
@@ -230,20 +247,20 @@ background = Background(5,5)
 
 
 first = True
-def print_debug_info(last_speed_x, last_speed_y, chunk_x, chunk_y):
-    x_position = round(rocket1.x_pos, 3)
-    y_position = round(rocket1.y_pos, 3)
+def print_debug_info(last_speed, chunk_coordinates):
+    x_position = round(rocket1.position[0], 3)
+    y_position = round(rocket1.position[1], 3)
     x_speed = round(rocket1.x_speed, 3)
     y_speed = round(rocket1.y_speed, 3)
-    x_acc = round((x_speed - last_speed_x), 3)
-    y_acc = round((y_speed - last_speed_y), 3)
+    x_acc = round((x_speed - last_speed[0]), 3)
+    y_acc = round((y_speed - last_speed[1]), 3)
     angle = round(rocket1.angle, 3)
     texts = [debug_font.render(f"x-position: {x_position}", True, 'red', 'white'),
              debug_font.render(f"y-position: {y_position}", True, 'blue', 'white'),
-             debug_font.render(f"Chunk based position: {chunk_x} {chunk_y}", True, 'black', 'white'),
+             debug_font.render(f"Chunk based position: {chunk_coordinates[0]} {chunk_coordinates[1]}", True, 'black', 'white'),
              debug_font.render(f"x-speed: {-x_speed}", True, 'red', 'white'),
              debug_font.render(f"y-speed: {-y_speed}", True, 'blue', 'white'),
-             debug_font.render(f"Actual speed: {round(math.sqrt(x_speed ** 2 + y_speed ** 2),3)}", True, 'black', 'white'),
+             debug_font.render(f"Actual speed: {round(sqrt(x_speed ** 2 + y_speed ** 2),3)}", True, 'black', 'white'),
              debug_font.render(f"x-acceleration: {-x_acc}", True, 'red', 'white'),
              debug_font.render(f"y-acceleration: {-y_acc}", True, 'blue', 'white'),
              debug_font.render(f"Angle: {-angle}", True, 'red', 'white'),
@@ -263,20 +280,22 @@ while run:
     # For FPS counter
     dt = (time.perf_counter_ns() - time1) / 1_000_000_000 # Because it is in nanoseconds
     time1 = time.perf_counter_ns()
-    #print(1/dt)
-
 
     # Apply running fps and fill in the background
     dt = timer.tick(fps) * 0.001
-    #timer.tick(fps)
-    screen.fill(SKY_COLOR)
+    dt = 0.016
 
+    # Fill the screen with background color
+    screen.fill(SKY_COLOR)
+    
     # Update background
-    chunk_coord = background.update(rocket1.x_pos, rocket1.y_pos)
+    chunk_coordinates = background.update(rocket1.position)
+
     # Read hid input and calculate some values
     speed = rocket1.update()
+
+    # Calculate the scale 
     scale = cubic_bezier(0, 0, 50, 0, 100, 100, 50, 100, speed / rocket1.max_speed) / 100 + 1
-    #scale = 1 / (0.5 * (speed / rocket1.max_speed) ** 5 + 0.5 * (speed / rocket1.max_speed) ** 3  + 0.1 * speed / rocket1.max_speed + 1)
 
     # Read hid inputs
     for event in pygame.event.get():
@@ -285,9 +304,9 @@ while run:
 
     # For debug info
     if not first:
-        print_debug_info(last_speed_x, last_speed_y, chunk_coord[0], chunk_coord[1])
+        print_debug_info(last_speed, chunk_coordinates)
     first = False
-    last_speed_x, last_speed_y = rocket1.x_speed, rocket1.y_speed
+    last_speed = rocket1.x_speed, rocket1.y_speed
 
     # Draw things on the screen
     pygame.display.update()

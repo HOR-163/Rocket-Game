@@ -64,6 +64,32 @@ images = {1: coin_img, 2: cash_img, 3: money_bag_img,
           "UFO": missing_texture, "satellite": missing_texture, #level 3
           None: missing_texture} 
 
+def map_color(x: float, in_min: float, in_max: float, out_min: float, out_max: float):
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+def gradient(y: int):
+    color1 = (176, 230, 235)
+    color2 = (0,0,255)
+    color3 = (0,0,0)
+    stop1 = 0
+    stop2 = 150
+    stop3 = 300
+
+    result = color3
+
+    if stop1 <= y < stop2:
+        percent = map_color(y, stop1, stop2, 0, 1)
+        result = (color1[0] + percent * (color2[0] - color1[0]),
+                  color1[1] + percent * (color2[1] - color1[1]),
+                  color1[2] + percent * (color2[2] - color1[2]))
+    elif stop2 <= y < stop3:
+        percent = map_color(y, stop2, stop3, 0, 1)
+        result = (color2[0] + percent * (color3[0] - color2[0]),
+                  color2[1] + percent * (color3[1] - color2[1]),
+                  color2[2] + percent * (color3[2] - color2[2]))
+    return result
+
+
 class Background:
     """Handle background."""
 
@@ -73,32 +99,24 @@ class Background:
         self.load_y = load_y
 
     def update(self, rocket_position: tuple[float, float]):
-
         chunk_x, chunk_y = world_to_chunk_coordinates(rocket_position)
-        """ 
-        chunk_x = int((rocket_position[0] - (WIDTH - C_WIDTH) // 2) // C_WIDTH)
-        chunk_y = int((-rocket_position[1] + (HEIGHT - C_HEIGHT) // 2) // C_HEIGHT) """
+        #chunk_y += int((self.load_y - 1) / 2)
+        for y_offset in range(int(-self.load_y / 2), int(self.load_y / 2) + 1):
+            background = gradient(chunk_y + y_offset)
+            for x_offset in range(int(-self.load_x / 2), int(self.load_x / 2) + 1):
 
-        for x_offset in range(int(-self.load_x / 2), int(self.load_x / 2) + 1):
-            for y_offset in range(int(-self.load_y / 2), int(self.load_y / 2) + 1):
-
-                world_x = (WIDTH - C_WIDTH) // 2 + C_WIDTH * (x_offset + chunk_x)
-                world_y = (HEIGHT - C_HEIGHT) // 2 + C_HEIGHT * (y_offset + chunk_y)
+                world_x, world_y = chunk_to_world_coordinates((chunk_x + x_offset, -chunk_y - y_offset))
 
                 chunk_screen_coordinates = world_to_screen_coordinates((world_x, -world_y), rocket_position, scale)
 
                 # Draw the rectangles
-                if chunk_y + y_offset >= -1:
-                    background_color = (176, 235, 230 - (chunk_y + y_offset + 1) / 100)
-
-                    pygame.draw.rect(screen, background_color, pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
+                if chunk_y + y_offset >= 0:
+                    pygame.draw.rect(screen, background, pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
                                                                 ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)))
-                    pygame.draw.rect(screen, 'red', pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
-                                                                ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)), 1)
 
 
                 # Draw the ground
-                elif chunk_y + y_offset < -1:
+                elif chunk_y + y_offset < 0:
                     pygame.draw.rect(screen, GROUND_COLOR, pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
                                                                         ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)))
                 
@@ -107,18 +125,21 @@ class Background:
                     chunk_coordinates_str = f"{chunk_x + x_offset} {chunk_y + y_offset}"
                     chunk_coordinates_rendered = debug_font.render(chunk_coordinates_str, True, 'black', 'white')
                     chunk_coordinates_str_size = debug_font.size(chunk_coordinates_str)
-                    chunk_coordinates_str_coordinates = world_to_screen_coordinates((WIDTH // 2 + C_WIDTH * (x_offset + chunk_x), -(HEIGHT // 2 + C_HEIGHT * (y_offset + chunk_y - 1))), rocket_position, scale)
-                    chunk_coordinates_str_coordinates = (chunk_coordinates_str_coordinates[0] - chunk_coordinates_str_size[0] / 2, chunk_coordinates_str_coordinates[1] - chunk_coordinates_str_size[1] / 2)
-
+                    chunk_coordinates_str_coordinates = (chunk_screen_coordinates[0] + C_WIDTH / 2 * scale - chunk_coordinates_str_size[0] / 2, 
+                                                         chunk_screen_coordinates[1] + C_HEIGHT / 2 * scale - chunk_coordinates_str_size[1] / 2)
                     # Write the chunk coordinates to the screen (uses basically the same equations like in background drawing)
                     screen.blit(chunk_coordinates_rendered, chunk_coordinates_str_coordinates)
+
+                    # Draw chunk borders
+                    pygame.draw.rect(screen, 'red', pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
+                                            ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)), 1)
 
         # For debugging
         return (chunk_x, chunk_y)
 
 
 def input():
-    """ Keyboard input handling, acceleration and speed physics."""
+    """ Keyboard input handling."""
     keys = pygame.key.get_pressed()
 
     # For debug fps changer
@@ -169,7 +190,7 @@ rocket = Rocket(WIDTH / 2, HEIGHT / 2, 4, 8, 2000, 100, collision_points, rocket
 # Make a player object (currently used only for money storage)
 player = Player()
 
-background = Background(5,5)
+background = Background(9,9)
 
 first = True
 
@@ -183,7 +204,7 @@ dt = 0.016
 
 while run:
     if first:
-        create_powerups_for_the_first_time(images)
+        create_objects_for_the_first_time(images)
 
     # For FPS counter
     real_dt = (time.perf_counter_ns() - time1) / 1_000_000_000 # Because it is in nanoseconds
@@ -192,8 +213,7 @@ while run:
         highest_dt = real_dt
     time1 = time.perf_counter_ns()
 
-     # Apply running fps and fill in the background
-    dt = timer.tick(fps) * 0.001
+
     dt = 0.016
 
     # Fill the screen with background color
@@ -202,7 +222,7 @@ while run:
     # Get input from keyboard mouse (HID)
     keys = input()
 
-    collision_color = check_collisions(player, rocket, powerups, images)
+    collision_color = check_collisions(player, rocket, collision_group, images)
 
 
     # Update background
@@ -211,11 +231,11 @@ while run:
     # Calculate new rocket position and draw the rocket
     speed = rocket.update(screen, dt, scale, keys, collision_color)
 
-    update_powerups(chunk_coordinates, images)
+    update_objects(chunk_coordinates, images)
 
     rocket_position = rocket.position
-    for powerup in powerups:
-        powerup.draw(screen, scale, rocket_position)
+    for object in collision_group:
+        object.draw(screen, scale, rocket_position)
 
 
 
@@ -242,8 +262,12 @@ while run:
 
 
 
+
     # Update the screen
     pygame.display.update()
+
+    # Apply running fps
+    dt = timer.tick(fps) * 0.001
     
 pygame.quit()
             

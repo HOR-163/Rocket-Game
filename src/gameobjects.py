@@ -176,13 +176,13 @@ class Rocket(pygame.sprite.Sprite):
         self.angle = 0
         self.fuel = self.start_fuel
 
-"""###########
-   POWERUPS
-###########"""
+"""#######################################
+   GAMEOBJECTS (MONEY, FUEL, OBSTACLES)
+#######################################"""
 
-class PowerUp(pygame.sprite.Sprite):
-    def __init__(self, powerup_type: str, level: int | None, position: tuple[int, int], image):
-        self.powerup_type = powerup_type # fuel, money
+class Object(pygame.sprite.Sprite):
+    def __init__(self, object_type: str, level: int | None, position: tuple[int, int], image):
+        self.object_type = object_type # fuel, money
         self.level = level # 1,2,3
         self.position = position # world position
         self.chunk_coordinates = world_to_chunk_coordinates(self.position)
@@ -195,7 +195,9 @@ class PowerUp(pygame.sprite.Sprite):
 
         self.image_size = self.image.get_width(), self.image.get_height()
         self.rect = pygame.Rect(0,1000, self.image_size[0], self.image_size[1]) # move the rect to impossibly low, that the collsiion wouldn't occur on the first frame
-    
+
+        self.scale_overwrite = 2
+
     def draw(self, screen, scale, rocket_position):
         screen_position = world_to_screen_coordinates(self.position, rocket_position, scale)
         if (screen_position[0] >= 0 - self.image_size[0] * 2 and 
@@ -204,58 +206,78 @@ class PowerUp(pygame.sprite.Sprite):
             screen_position[1] <= HEIGHT + self.image_size[1] * 2 and 
             self.chunk_coordinates[1] >= 2):
             
-            scaled_image = pygame.transform.scale(self.image, (self.image_size[0] * scale * 2, self.image_size[1] * scale * 2))
+            scaled_image = pygame.transform.scale(self.image, (self.image_size[0] * scale * self.scale_overwrite, self.image_size[1] * scale * self.scale_overwrite))
             self.mask = pygame.mask.from_surface(scaled_image)
             self.rect = scaled_image.get_rect(center = screen_position)
             screen.blit(scaled_image, self.rect)
 
-# List of powerup sprites
-powerups = pygame.sprite.Group()
+# List of money, fuel and obstacles (all that need collision detection)
+collision_group = pygame.sprite.Group()
 
 # Just used for the first time
-last_chunk_coordinates = (0,-1)
+last_chunk_coordinates = (0,0)
 
-def create_powerups_for_the_first_time(images: dict) -> None:
-    global powerups
+def create_objects_for_the_first_time(images: dict) -> None:
+    global objects
 
-    for powerup_type in powerup_amounts: # Go through all powerup types
-        for _ in range(powerup_amounts[powerup_type]): # Amount of powerups
-            random_coordinates = create_random_coordinates(chunk_to_world_coordinates((-chunks_to_generate_powerups, chunks_to_generate_powerups)), 
-                                                            (C_WIDTH * (chunks_to_generate_powerups * 2 + 1), C_HEIGHT * (chunks_to_generate_powerups * 2 + 1)))
-            if powerup_type == "money":
-                powerup_level = get_money_level(world_to_chunk_coordinates(random_coordinates))
-                powerups.add(PowerUp(powerup_type, powerup_level, random_coordinates, images[powerup_level]))
+    for object_type in powerup_amounts: # Go through all powerup types
+        for _ in range(powerup_amounts[object_type]): # Amount of powerups
+            random_coordinates = create_random_coordinates(chunk_to_world_coordinates((-generation_radius, generation_radius)), 
+                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT * (generation_radius * 2 + 1)))
+            if object_type == "money":
+                object_level = get_money_level(world_to_chunk_coordinates(random_coordinates))
+                collision_group.add(Object(object_type, object_level, random_coordinates, images[object_level]))
             
-            elif powerup_type == "fuel":
-                powerup_level = get_fuel_level(world_to_chunk_coordinates(random_coordinates))
-                powerups.add(PowerUp(powerup_type, powerup_level, random_coordinates, images[powerup_level + 3]))
+            elif object_type == "fuel":
+                object_level = get_fuel_level(world_to_chunk_coordinates(random_coordinates))
+                collision_group.add(Object(object_type, object_level, random_coordinates, images[object_level + 3]))
     
     # Create x amount of obstacles 
 
     for _ in range(obstacle_amount):
-        random_coordinates = create_random_coordinates(chunk_to_world_coordinates((-chunks_to_generate_powerups, chunks_to_generate_powerups)), 
-                                                            (C_WIDTH * (chunks_to_generate_powerups * 2 + 1), C_HEIGHT * (chunks_to_generate_powerups * 2 + 1)))
-        # Get the first level of obstacles, then get a rendom obstacle type from there
-        powerup_type = obstacle_types[1][random.randint(0, len(obstacle_types[1])) - 1] # len - 1 (lists start from 0)
-        powerups.add(PowerUp(powerup_type, 1, random_coordinates, images[powerup_type])) # Instead of 1, there could be None, because that value is unused for obstacles
+        random_coordinates = create_random_coordinates(chunk_to_world_coordinates((-generation_radius, generation_radius)), 
+                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT * (generation_radius * 2 + 1)))
+        # Get the first level of obstacles, then get a random obstacle type from there
+        object_type = obstacle_types[1][random.randint(0, len(obstacle_types[1])) - 1] # len - 1 (lists start from 0)
+        collision_group.add(Object(object_type, 1, random_coordinates, images[object_type])) # Instead of 1, there could be None, because that value is unused for obstacles
 
-    
+
+def reset_objects(images: dict) -> None:
+    for object in collision_group:
+        object_type = object.object_type
+        object_level = object.level
+        random_coordinates = create_random_coordinates(chunk_to_world_coordinates((-generation_radius, generation_radius)), 
+                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT * (generation_radius * 2 + 1)))
+        if object_type == "money":
+            object_level = get_money_level(world_to_chunk_coordinates(random_coordinates))
+            object.__init__(object_type, object_level, random_coordinates, images[object_level])
+        
+        elif object_type == "fuel":
+            object_level = get_fuel_level(world_to_chunk_coordinates(random_coordinates))
+            object.__init__(object_type, object_level, random_coordinates, images[object_level + 3])
+
+        elif object_type in all_obstacles:
+            # Get the first level of obstacles, then get a random obstacle type from there
+            object_type = obstacle_types[1][random.randint(0, len(obstacle_types[1])) - 1] # len - 1 (lists start from 0)
+            object.__init__(object_type, 1, random_coordinates, images[object_type]) # Instead of 1, there could be None, because that value is unused for obstacles
+
+
             
-def update_powerups(chunk_coordinates: tuple[int, int], images) -> None:
+def update_objects(chunk_coordinates: tuple[int, int], images) -> None:
     global last_chunk_coordinates
 
     if last_chunk_coordinates != chunk_coordinates:
 
         # See if some powerups could be removed
-        for powerup in powerups:
-            if powerup.chunk_coordinates[1] < chunk_coordinates[1] - chunks_to_generate_powerups: # powerup is too low
-                create_new_powerup(powerup, chunk_coordinates, "up", images)
-            elif powerup.chunk_coordinates[1] > chunk_coordinates[1] + chunks_to_generate_powerups: # powerup is too high
-                create_new_powerup(powerup, chunk_coordinates, "down", images)
-            elif powerup.chunk_coordinates[0] < chunk_coordinates[0] - chunks_to_generate_powerups: # powerup is too left
-                create_new_powerup(powerup, chunk_coordinates, "right", images)
-            elif powerup.chunk_coordinates[0] > chunk_coordinates[0] + chunks_to_generate_powerups: # powerup is too right
-                create_new_powerup(powerup, chunk_coordinates, "left", images)
+        for object in collision_group:
+            if object.chunk_coordinates[1] < chunk_coordinates[1] - generation_radius: # object is too low
+                create_new_object(object, chunk_coordinates, "up", images)
+            elif object.chunk_coordinates[1] > chunk_coordinates[1] + generation_radius: # object is too high
+                create_new_object(object, chunk_coordinates, "down", images)
+            elif object.chunk_coordinates[0] < chunk_coordinates[0] - generation_radius: # object is too left
+                create_new_object(object, chunk_coordinates, "right", images)
+            elif object.chunk_coordinates[0] > chunk_coordinates[0] + generation_radius: # object is too right
+                create_new_object(object, chunk_coordinates, "left", images)
         last_chunk_coordinates = chunk_coordinates
 
 def get_money_level(chunk_coordinates: tuple[int,int]) -> int:
@@ -320,46 +342,40 @@ def get_obstacle_level(chunk_coordinates: tuple[int, int]) -> int:
     elif chunk_coordinates[1] >= 200:
         return 3
 
-def create_new_powerup(powerup, chunk_coordinates: tuple[int, int], direction: str, images: dict) -> None:
-    powerup_type = powerup.powerup_type
+def create_new_object(object, chunk_coordinates: tuple[int, int], direction: str, images: dict) -> None:
+    object_type = object.object_type
 
     # Create random coordinates, where the powerup is going to be placed
     if direction == "up":
-        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - chunks_to_generate_powerups,         # start_x
-                                                                            chunk_coordinates[1] + chunks_to_generate_powerups - 1)),       # start_y
-                                                                            (C_WIDTH * (chunks_to_generate_powerups * 2 + 1) , C_HEIGHT))   # size
+        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - generation_radius,         # start_x
+                                                                            chunk_coordinates[1] + generation_radius - 1)),       # start_y
+                                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT))   # size
     elif direction == "down":
-        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - chunks_to_generate_powerups,         # start_x
-                                                                            chunk_coordinates[1] - chunks_to_generate_powerups - 1)),       # start_y
-                                                                            (C_WIDTH * (chunks_to_generate_powerups * 2 + 1), C_HEIGHT))    # size
+        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - generation_radius,         # start_x
+                                                                            chunk_coordinates[1] - generation_radius - 1)),       # start_y
+                                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT))    # size
     elif direction == "right":
-        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] + chunks_to_generate_powerups - 1,     # start_x
-                                                                            chunk_coordinates[1] + chunks_to_generate_powerups)),           # start_y
-                                                                            (C_WIDTH, C_HEIGHT * (chunks_to_generate_powerups * 2 + 1)))    # size
+        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] + generation_radius - 1,     # start_x
+                                                                            chunk_coordinates[1] + generation_radius)),           # start_y
+                                                                            (C_WIDTH, C_HEIGHT * (generation_radius * 2 + 1)))    # size
     elif direction == "left":
-        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - chunks_to_generate_powerups - 1,     # start_x
-                                                                            chunk_coordinates[1] + chunks_to_generate_powerups)),           # start_y
-                                                                            (C_WIDTH, C_HEIGHT * (chunks_to_generate_powerups * 2 + 1)))    # size
+        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - generation_radius - 1,     # start_x
+                                                                            chunk_coordinates[1] + generation_radius)),           # start_y
+                                                                            (C_WIDTH, C_HEIGHT * (generation_radius * 2 + 1)))    # size
 
     # Create powerups according to their type
-    if powerup_type == "money":
-        powerup_level = get_money_level(chunk_coordinates)
-        powerup.__init__(powerup_type, powerup_level, random_position, images[powerup_level])
+    if object_type == "money":
+        object_level = get_money_level(chunk_coordinates)
+        object.__init__(object_type, object_level, random_position, images[object_level])
 
-    elif powerup_type == "fuel":
-        powerup_level = get_fuel_level(chunk_coordinates)
-        powerup.__init__(powerup_type, powerup_level, random_position, images[powerup_level + 3])
-    elif powerup_type in all_obstacles:
+    elif object_type == "fuel":
+        object_level = get_fuel_level(chunk_coordinates)
+        object.__init__(object_type, object_level, random_position, images[object_level + 3])
+    elif object_type in all_obstacles:
         obstacle_level = get_obstacle_level(chunk_coordinates)
         obstacle_type = obstacle_types[obstacle_level][random.randint(0, len(obstacle_types[obstacle_level]) - 1)]
-        powerup.__init__(obstacle_type, obstacle_level, random_position, images[obstacle_type])
+        object.__init__(obstacle_type, obstacle_level, random_position, images[obstacle_type])
 
-""" # List of obstacle sprites
-obstacles = pygame.sprite.Group()
-
-def create_obstacles_for_the_first_time(images: dict) -> None:
-    global obstacles
-     """
 
 class Player():
     def __init__(self, starting_money = 100) :

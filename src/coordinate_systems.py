@@ -31,7 +31,7 @@ def world_to_chunk_coordinates(world_coords: tuple[int | None, int | None]) -> t
     if world_coords[0] is not None:
         chunk_x = int((world_coords[0] - (WIDTH - C_WIDTH) // 2) // C_WIDTH)
     if world_coords[1] is not None:
-        chunk_y = int((-world_coords[1] + (HEIGHT - C_HEIGHT) // 2) // C_HEIGHT)
+        chunk_y = - int((world_coords[1] + (HEIGHT - C_HEIGHT) // 2) // C_HEIGHT)
 
     return (chunk_x, chunk_y)
 

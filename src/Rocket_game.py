@@ -12,7 +12,9 @@ from math import *
 import os
 import time
 import random
+import sys
 
+from button import Button
 from CONSTANTS import *
 from bezier import *
 from coordinate_systems import *
@@ -43,6 +45,9 @@ debug_font = pygame.font.SysFont('consolas', 15)
 path = os.getcwd()
 # For IDLE uncomment the following line (in VSCode comment this line)
 #path = path[:path.rfind("\\") + 1] # <------- This one
+BG = pygame.image.load(path + "\\images\\MenuBackground.png")
+BG = pygame.transform.scale(BG, (1000, 1000))
+
 missing_texture = pygame.image.load(path + "\\images\\missing_texture.png").convert_alpha()
 
 rocket_image_og = pygame.image.load(path + "\\images\\rocket2.png").convert_alpha()
@@ -192,84 +197,157 @@ player = Player()
 
 background = Background(9,9)
 
-first = True
-
-run = True
-color = (0,0,0)
-
-time1, time2 = 0,0
-
-highest_dt = 0.0
-dt = 0.016
-
-while run:
-    if first:
-        create_objects_for_the_first_time(images)
-
-    # For FPS counter
-    real_dt = (time.perf_counter_ns() - time1) / 1_000_000_000 # Because it is in nanoseconds
-
-    if real_dt >= highest_dt and not first:
-        highest_dt = real_dt
-    time1 = time.perf_counter_ns()
 
 
+def play():
+    DEBUG = True
+
+    scale = 1
+
+    run = True
+
+    first = True
+    color = (0,0,0)
+
+    time1, time2 = 0,0
+
+    highest_dt = 0.0
     dt = 0.016
 
-    # Fill the screen with background color
-    screen.fill(SKY_COLOR)
-    
-    # Get input from keyboard mouse (HID)
-    keys = input()
+    while run:
+        if first:
+            create_objects_for_the_first_time(images)
 
-    collision_color = check_collisions(player, rocket, collision_group, images)
+        # For FPS counter
+        real_dt = (time.perf_counter_ns() - time1) / 1_000_000_000 # Because it is in nanoseconds
 
-
-    # Update background
-    chunk_coordinates = background.update(rocket.position)
-
-    # Calculate new rocket position and draw the rocket
-    speed = rocket.update(screen, dt, scale, keys, collision_color)
-
-    update_objects(chunk_coordinates, images)
-
-    rocket_position = rocket.position
-    for object in collision_group:
-        object.draw(screen, scale, rocket_position)
+        if real_dt >= highest_dt and not first:
+            highest_dt = real_dt
+        time1 = time.perf_counter_ns()
 
 
+        dt = 0.016
+
+        # Fill the screen with background color
+        screen.fill(SKY_COLOR)
+        
+        # Get input from keyboard mouse (HID)
+        keys = input()
+
+        collision_color = check_collisions(player, rocket, collision_group, images)
 
 
+        # Update background
+        chunk_coordinates = background.update(rocket.position)
 
-    # Calculate the scale 
-    scale = cubic_bezier(0, 0, 50, 0, 100, 100, 50, 100, speed / rocket.max_speed) / 100 + 1
+        # Calculate new rocket position and draw the rocket
+        speed = rocket.update(screen, dt, scale, keys, collision_color)
 
-    # For debug info
-    if not first and DEBUG == True:
-        debug.info(screen, debug_font, rocket, last_speed, chunk_coordinates, scale, real_dt, highest_dt)
-    else:
-        first = False
+        update_objects(chunk_coordinates, images)
 
-    last_speed = rocket.x_speed, rocket.y_speed
-
-    # Read HID inputs ONLY FOR QUITTING THE GAME
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT or keys[pygame.K_ESCAPE]:
-            run = False
-        if event.type == pygame.KEYUP and keys[pygame.K_F1]:
-            DEBUG = not DEBUG
-            rocket.debug = DEBUG
+        rocket_position = rocket.position
+        for object in collision_group:
+            object.draw(screen, scale, rocket_position)
 
 
 
 
-    # Update the screen
-    pygame.display.update()
 
-    # Apply running fps
-    dt = timer.tick(fps) * 0.001
-    
-pygame.quit()
-            
-    
+        # Calculate the scale 
+        scale = cubic_bezier(0, 0, 50, 0, 100, 100, 50, 100, speed / rocket.max_speed) / 100 + 1
+
+        # For debug info
+        if not first and DEBUG == True:
+            debug.info(screen, debug_font, rocket, last_speed, chunk_coordinates, scale, real_dt, highest_dt)
+        else:
+            first = False
+
+        last_speed = rocket.x_speed, rocket.y_speed
+
+        # Read HID inputs ONLY FOR QUITTING THE GAME
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or keys[pygame.K_ESCAPE]:
+                run = False
+            if event.type == pygame.KEYUP and keys[pygame.K_F1]:
+                DEBUG = not DEBUG
+                rocket.debug = DEBUG
+
+
+        # Update the screen
+        pygame.display.update()
+
+        # Apply running fps
+        dt = timer.tick(fps) * 0.001
+
+
+def get_font(size):
+    return pygame.font.Font(path + "\\images\\font.ttf", size)
+
+def upgrades():
+    while True:
+        OPTIONS_MOUSE_POS = pygame.mouse.get_pos()
+
+        screen.fill("white")
+
+        UPGRADES_TEXT = get_font(45).render("UPGRADES", True, "Black")
+        UPGRADES_RECT = UPGRADES_TEXT.get_rect(center=(WIDTH/2, HEIGHT/3))
+        screen.blit(UPGRADES_TEXT, UPGRADES_RECT)
+
+        UPGRADES_BACK = Button(image=None, pos=(WIDTH/2, HEIGHT/1.5), 
+                            text_input="BACK", font=get_font(75), base_color="Black", hovering_color="Green")
+
+        UPGRADES_BACK.changeColor(OPTIONS_MOUSE_POS)
+        UPGRADES_BACK.update(screen)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if UPGRADES_BACK.checkForInput(OPTIONS_MOUSE_POS):
+                    main_menu()
+
+        pygame.display.update()
+
+
+def main_menu():
+    while True:
+        screen.blit(BG, (0, 0))
+
+        MENU_MOUSE_POS = pygame.mouse.get_pos()
+
+        MENU_TEXT = get_font(100).render("ROCKETMAN", True, "#b68f40")
+        MENU_RECT = MENU_TEXT.get_rect(center=(500, 100))
+
+        # All avaliable buttons on the screen
+        PLAY_BUTTON = Button(image=pygame.image.load("images/Play Rect.png"), pos=(500, 250), 
+                            text_input="PLAY", font=get_font(70), base_color="#d7fcd4", hovering_color="White")
+        UPGRADES_BUTTON = Button(image=pygame.image.load("images/Upgrades Rect.png"), pos=(500, 400), 
+                            text_input="UPGRADES", font=get_font(70), base_color="#d7fcd4", hovering_color="White")
+        QUIT_BUTTON = Button(image=pygame.image.load("images/Quit Rect.png"), pos=(500, 550), 
+                            text_input="QUIT", font=get_font(70), base_color="#d7fcd4", hovering_color="White")
+
+        screen.blit(MENU_TEXT, MENU_RECT)
+
+        for button in [PLAY_BUTTON, UPGRADES_BUTTON, QUIT_BUTTON]:
+            button.changeColor(MENU_MOUSE_POS)
+            button.update(screen)
+
+        # If a button is pressed, starts any of the options (game, upgrades, quit)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if PLAY_BUTTON.checkForInput(MENU_MOUSE_POS):
+                    play()
+                if UPGRADES_BUTTON.checkForInput(MENU_MOUSE_POS):
+                    upgrades()
+                if QUIT_BUTTON.checkForInput(MENU_MOUSE_POS):
+                    pygame.quit()
+                    sys.exit()
+
+        pygame.display.update()
+
+main_menu()
         

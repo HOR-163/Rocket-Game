@@ -6,21 +6,23 @@
 
 """Start of the actual program"""
 import pygame
-# For antialiasing one day (maybe)
-#import pygame.gfxdraw
 from math import *
-import os
-import time
-import random
 import sys
+import time
 
-from button import Button
+# Extras
 from CONSTANTS import *
-from bezier import *
+from bezier_and_map import *
 from coordinate_systems import *
 from gameobjects import *
 from collisions import check_collisions
+from player import *
+from gameobject_scripts import *
+from background import *
+from button import *
+
 import debug
+
 DEBUG = True
 
 """######################################################################
@@ -35,30 +37,42 @@ timer = pygame.time.Clock()
 # Set some global variables for the rockets
 scale = 1
 
-
 # Define the debug font
 debug_font = pygame.font.SysFont('consolas', 15)
 
 """#################################################
    Load all images, that are needed for the game.
 #################################################"""
-path = os.getcwd()
-# For IDLE uncomment the following line (in VSCode comment this line)
-#path = path[:path.rfind("\\") + 1] # <------- This one
-BG = pygame.image.load(path + "\\images\\MenuBackground.png")
-BG = pygame.transform.scale(BG, (1000, 1000))
 
-missing_texture = pygame.image.load(path + "\\images\\missing_texture.png").convert_alpha()
+missing_texture = pygame.image.load(PATH + "/images/missing_texture.png").convert_alpha()
 
-rocket_image_og = pygame.image.load(path + "\\images\\rocket2.png").convert_alpha()
+rocket_image = pygame.image.load(PATH + "/images/rocket2.png").convert_alpha()
 
-coin_img = pygame.image.load(path + "\\images\\coin.png").convert_alpha()
-cash_img = pygame.image.load(path + "\\images\\cash.png").convert_alpha()
-money_bag_img = pygame.image.load(path + "\\images\\money_bag.png").convert_alpha()
+coin_img = pygame.image.load(PATH + "/images/coin.png").convert_alpha()
+cash_img = pygame.image.load(PATH + "/images/cash.png").convert_alpha()
+money_bag_img = pygame.image.load(PATH + "/images/money_bag.png").convert_alpha()
 
-small_fuel_img = pygame.image.load(path + "\\images\\small_fuel.png").convert_alpha()
-medium_fuel_img = pygame.image.load(path + "\\images\\medium_fuel.png").convert_alpha()
-large_fuel_img = pygame.image.load(path + "\\images\\large_fuel.png").convert_alpha()
+small_fuel_img = pygame.image.load(PATH + "/images/small_fuel.png").convert_alpha()
+medium_fuel_img = pygame.image.load(PATH + "/images/medium_fuel.png").convert_alpha()
+large_fuel_img = pygame.image.load(PATH + "/images/large_fuel.png").convert_alpha()
+
+
+cloud_image_0 = pygame.image.load(PATH + "/images/cloud0.png").convert_alpha() # Image width should be 150 or what looks good
+cloud_image_1 = pygame.image.load(PATH + "/images/cloud1.png").convert_alpha() # Image width should be 175 or what looks good
+cloud_image_2 = pygame.image.load(PATH + "/images/cloud2.png").convert_alpha() # Image width should be 200 or what looks good
+cloud_image_3 = pygame.image.load(PATH + "/images/cloud3.png").convert_alpha() # Image width should be 250 or what looks good (or bigger)
+cloud_image_4 = pygame.image.load(PATH + "/images/cloud4.png").convert_alpha() # Image width should be 300 or what looks good (or bigger)
+cloud_image_5 = pygame.image.load(PATH + "/images/cloud5.png").convert_alpha() # Image width should be 400 or what looks good (or bigger)
+
+ground = pygame.image.load(PATH + "/images/ground.png").convert_alpha()
+
+# UI elements
+wind_right = pygame.image.load(PATH + "/images/wind_right.png").convert_alpha()
+wind_left = pygame.image.load(PATH + "/images/wind_left.png").convert_alpha()
+danger = pygame.image.load(PATH + "/images/danger.png").convert_alpha()
+BG = pygame.image.load(PATH + "/images/MenuBackground.png")
+BG = pygame.transform.scale(BG, (WIDTH, HEIGHT))
+
 
 
 images = {1: coin_img, 2: cash_img, 3: money_bag_img,
@@ -69,79 +83,7 @@ images = {1: coin_img, 2: cash_img, 3: money_bag_img,
           "UFO": missing_texture, "satellite": missing_texture, #level 3
           None: missing_texture} 
 
-def map_color(x: float, in_min: float, in_max: float, out_min: float, out_max: float):
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-
-def gradient(y: int):
-    color1 = (176, 230, 235)
-    color2 = (0,0,255)
-    color3 = (0,0,0)
-    stop1 = 0
-    stop2 = 150
-    stop3 = 300
-
-    result = color3
-
-    if stop1 <= y < stop2:
-        percent = map_color(y, stop1, stop2, 0, 1)
-        result = (color1[0] + percent * (color2[0] - color1[0]),
-                  color1[1] + percent * (color2[1] - color1[1]),
-                  color1[2] + percent * (color2[2] - color1[2]))
-    elif stop2 <= y < stop3:
-        percent = map_color(y, stop2, stop3, 0, 1)
-        result = (color2[0] + percent * (color3[0] - color2[0]),
-                  color2[1] + percent * (color3[1] - color2[1]),
-                  color2[2] + percent * (color3[2] - color2[2]))
-    return result
-
-
-class Background:
-    """Handle background."""
-
-    def __init__(self, load_x: int, load_y: int):
-        # how many chunks to load (e.g 3x3 amount of chunks)
-        self.load_x = load_x
-        self.load_y = load_y
-
-    def update(self, rocket_position: tuple[float, float]):
-        chunk_x, chunk_y = world_to_chunk_coordinates(rocket_position)
-        #chunk_y += int((self.load_y - 1) / 2)
-        for y_offset in range(int(-self.load_y / 2), int(self.load_y / 2) + 1):
-            background = gradient(chunk_y + y_offset)
-            for x_offset in range(int(-self.load_x / 2), int(self.load_x / 2) + 1):
-
-                world_x, world_y = chunk_to_world_coordinates((chunk_x + x_offset, -chunk_y - y_offset))
-
-                chunk_screen_coordinates = world_to_screen_coordinates((world_x, -world_y), rocket_position, scale)
-
-                # Draw the rectangles
-                if chunk_y + y_offset >= 0:
-                    pygame.draw.rect(screen, background, pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
-                                                                ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)))
-
-
-                # Draw the ground
-                elif chunk_y + y_offset < 0:
-                    pygame.draw.rect(screen, GROUND_COLOR, pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
-                                                                        ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)))
-                
-                if DEBUG:
-                    # Create and find the size (length, height) of chunk text (mainly for debugging)
-                    chunk_coordinates_str = f"{chunk_x + x_offset} {chunk_y + y_offset}"
-                    chunk_coordinates_rendered = debug_font.render(chunk_coordinates_str, True, 'black', 'white')
-                    chunk_coordinates_str_size = debug_font.size(chunk_coordinates_str)
-                    chunk_coordinates_str_coordinates = (chunk_screen_coordinates[0] + C_WIDTH / 2 * scale - chunk_coordinates_str_size[0] / 2, 
-                                                         chunk_screen_coordinates[1] + C_HEIGHT / 2 * scale - chunk_coordinates_str_size[1] / 2)
-                    # Write the chunk coordinates to the screen (uses basically the same equations like in background drawing)
-                    screen.blit(chunk_coordinates_rendered, chunk_coordinates_str_coordinates)
-
-                    # Draw chunk borders
-                    pygame.draw.rect(screen, 'red', pygame.Rect(chunk_screen_coordinates[0], chunk_screen_coordinates[1], 
-                                            ceil(C_WIDTH * scale), ceil(C_HEIGHT * scale)), 1)
-
-        # For debugging
-        return (chunk_x, chunk_y)
-
+times = []
 
 def input():
     """ Keyboard input handling."""
@@ -171,6 +113,9 @@ def input():
     
     return keys
 
+""" wind_strength = 0
+wind_duration = [2,4] # [x,y] aka x to y seconds
+wind_timer = 0 """
 
 
 """ # Points on the corners of the rocket (size in px, coords origin is the center of the rocket)
@@ -182,41 +127,96 @@ collision_points = [[-25,50],[25,50],[-25,-50],[25,-50]]
 #                    |         |        |  |   |    |
 rocket = Rocket(WIDTH / 2, HEIGHT / 2, 4, 8, 2000, collision_points, rocket_image_og) """
 
+
+# INITialize the objects
 collision_points = [[1,49],[25,-1],[13,-50],[-11,-50], [-23,-1]]
 #                 start_x,  start_y,    acceleration,
 #                    |         |        |  boost acceleration,
 #                    |         |        |  |   maximum speed
 #                    |         |        |  |   |    start_fuel
 #                    |         |        |  |   |    |           points for collision
-#                    |         |        |  |   |    |           |               image
-#                    |         |        |  |   |    |           |               |
-rocket = Rocket(WIDTH / 2, HEIGHT / 2, 4, 8, 2000, 100, collision_points, rocket_image_og) 
-
-# Make a player object (currently used only for money storage)
-player = Player()
-
-background = Background(9,9)
+#                    |         |        |  |   |    |           |                image
+#                    |         |        |  |   |    |           |                |
+rocket = Rocket((WIDTH / 2, HEIGHT / 2), 4, 8, 2000, 100, collision_points, rocket_image) # Rocket in gameobjects.py
 
 
+player = Player(DEFAULT_PLAYER_DATA) # all of it in player.py
+print(player.load_data())
+
+
+background = Background(2 * CHUNK_GEN_RADIUS + 1, debug_font) # Background in background.py
+
+minimap = MiniMap(player.minimap_radius) # Minimap in gameobjects.py
+
+""" first = True 
+
+run = True """
+
+clouds = pygame.sprite.Group()
+clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_0, 1.2))
+clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_1, 1.15))
+clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_2, 1.1))
+
+clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_3, 1.05))
+clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_4, 1.03))
+clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_5, 1.01))
+
+
+
+""" collision_debug_color = (0,0,0, 128)
+
+# Used for debugging framerate and performance
+time1, time2 = 0, 0
+highest_dt = 0.0
+dt = 0.016 """
+
+def get_time():
+    return time.perf_counter_ns()
+
+def get_font(size):
+    return pygame.font.Font(PATH + "/images/font.ttf", size)
 
 def play():
     DEBUG = True
-
     scale = 1
-
     run = True
-
     first = True
-    color = (0,0,0)
-
     time1, time2 = 0,0
+    highest_dt = 0.001
+    dt = 0.16
+    wind_timer = 0
+    wind_strength = 0
+    collision_group = pygame.sprite.Group()
+    
+    game_state = PLAYING
+    chunk_coordinates = (0,-1)
+    last_speed = (0,0)
 
-    highest_dt = 0.0
-    dt = 0.016
+    rocket.reset(player)
 
     while run:
+        if game_state == PAUSED:
+            keys = input()
+            for event in pygame.event.get():
+                if event.type == pygame.KEYUP:
+                    if keys[pygame.K_SPACE]:
+                        game_state = PLAYING
+                        break
+                    elif keys[pygame.K_ESCAPE]:
+                        player.save_data()
+                        run = False
+                        break
+                elif event.type == pygame.QUIT:
+                    player.save_data()
+                    run = False
+                    break
+            timer.tick(fps)
+            continue
+
         if first:
-            create_objects_for_the_first_time(images)
+            create_objects_for_the_first_time(collision_group, images)
+            screen.fill(SKY_COLOR)
+            print(len(collision_group))
 
         # For FPS counter
         real_dt = (time.perf_counter_ns() - time1) / 1_000_000_000 # Because it is in nanoseconds
@@ -225,36 +225,106 @@ def play():
             highest_dt = real_dt
         time1 = time.perf_counter_ns()
 
-
+        # pygame deltatime in ms
         dt = 0.016
 
         # Fill the screen with background color
-        screen.fill(SKY_COLOR)
-        
+        if not first:
+            screen.fill(gradient(chunk_coordinates[1] + 2))
+
         # Get input from keyboard mouse (HID)
         keys = input()
 
-        collision_color = check_collisions(player, rocket, collision_group, images)
+        time12 = get_time()
 
+        collided = check_collisions(player, rocket, collision_group, images)
 
-        # Update background
-        chunk_coordinates = background.update(rocket.position)
+        if collided:
+            wind_strength = 0
+            wind_timer = 0
+
+        time13 = get_time()
+
+        # Draw parallaxed clouds
+        for cloud in clouds:
+            cloud.draw(screen, rocket.screen_center, scale)
+
+        # Update and draw background
+        chunk_coordinates = background.update(screen, scale, rocket.screen_center ,ground, DEBUG)
+
+        time14 = get_time()
 
         # Calculate new rocket position and draw the rocket
-        speed = rocket.update(screen, dt, scale, keys, collision_color)
+        rocket.update(screen, dt, scale, keys, player)
+        rocket.draw(screen, scale)
+        time15 = get_time()
 
-        update_objects(chunk_coordinates, images)
+        time16 = get_time()
 
-        rocket_position = rocket.position
+        # Load and unload objects if they are too far from the rocket.
+        objects_load_unload(collision_group, chunk_coordinates, images) # Located in gameobject_scripts.py
+
+        time17 = get_time()
+        
+        minimap.draw_base(screen, rocket.position)
+
+        time18 = get_time()
+
+
+
+        # Go through all objects and move as well as draw them on the screen and on the minimap
         for object in collision_group:
-            object.draw(screen, scale, rocket_position)
+            if object.type in MAGNETIC_OBJECTS:
+                object.move_towards(rocket.position, rocket.speed, player, dt)
+
+            object.update()
+            object.draw(screen, scale, rocket.screen_center)
+            
+            # Draw all objects (fuel, money, obstacles) to the minimap
+            minimap.draw(screen, rocket.position, object, DEBUG)
+        
+
+        time19 = get_time()
+
+        # HERE GO ALL UI ELEMENTS
+        money_and_fuel = debug_font.render(f"Money: {player.money} | Fuel: {round(rocket.fuel,0)}", True, 'black', 'white')
+        screen.blit(money_and_fuel, (WIDTH // 2 - money_and_fuel.get_width() // 2, 0))
+
+        if rocket.disabled > 0:
+            if (rocket.disabled - int(rocket.disabled) < 0.5):
+                    screen.blit(danger, (WIDTH / 2 - danger.get_width() / 2, HEIGHT / 2 - danger.get_height() / 2))
+
+        if wind_timer == 0:
+            wind_timer = (random.randint(0, WIND_CHANCE) == 1) * map_value(random.random(), 0,1, WIND_DURATION[0], WIND_DURATION[1])  # 4 seconds of wind
+            if wind_timer != 0:
+                wind_strength = random.randint(-10, 10)
+
+        if wind_timer < 0:
+            wind_timer = 0
+
+        if wind_timer > 0:
+            wind_timer -= dt
+            rocket.angle += sin(radians(rocket.angle + 90)) * dt * wind_strength
+            rocket.speed = (rocket.speed[0] + wind_strength * dt * 10, rocket.speed[1])
+            if wind_strength < 0:
+                wind_scaled_image = pygame.transform.scale_by(wind_right, scale)
+                arrow_position = world_to_screen_coordinates(rocket.position, rocket.screen_center, scale)
+                arrow_position = (arrow_position[0] + 75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
+                screen.blit(wind_scaled_image, arrow_position)
+                
+            if wind_strength > 0:
+                wind_scaled_image = pygame.transform.scale_by(wind_left, scale)
+                arrow_position = world_to_screen_coordinates(rocket.position, rocket.screen_center, scale)
+                arrow_position = (arrow_position[0] -  75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
+                screen.blit(wind_scaled_image, arrow_position)
 
 
-
-
+        time20 = get_time()
 
         # Calculate the scale 
-        scale = cubic_bezier(0, 0, 50, 0, 100, 100, 50, 100, speed / rocket.max_speed) / 100 + 1
+        scale = cubic_bezier(0, 0, 50, 0, 100, 100, 50, 100, rocket.air_speed / rocket.max_speed) / 100 + 1
+
+        time21 = get_time()
 
         # For debug info
         if not first and DEBUG == True:
@@ -262,26 +332,62 @@ def play():
         else:
             first = False
 
-        last_speed = rocket.x_speed, rocket.y_speed
+        last_speed = rocket.speed
 
         # Read HID inputs ONLY FOR QUITTING THE GAME
         for event in pygame.event.get():
             if event.type == pygame.QUIT or keys[pygame.K_ESCAPE]:
                 run = False
-            if event.type == pygame.KEYUP and keys[pygame.K_F1]:
-                DEBUG = not DEBUG
-                rocket.debug = DEBUG
+                
+
+            #Pressing the "R" key, resets the rocket
+            if keys[pygame.K_r]:
+                rocket.reset(player)
+                wind_timer = 0
+                wind_strength = 0
+
+            if event.type == pygame.KEYUP:
+                if keys[pygame.K_SPACE]:
+                    game_state = PAUSED
+
+                elif keys[pygame.K_F1]:
+                    DEBUG = not DEBUG
+                    rocket.debug = DEBUG
+
+                elif keys[pygame.K_F2]:
+                    print("------NEW------")
+                    print("Fill and input: ", f"{time12 - time1:,}")
+                    print("Check collisions: ", f"{time13 - time12:,}")
+                    print("Update background: ", f"{time14 - time13:,}")
+                    print("Update rocket: ", f"{time15 - time14:,}")
+                    print("Get rocket_position: (probs smth small) ", f"{time16 - time15:,}")
+                    print("Update objects: ", f"{time17 - time16:,}")
+                    print("Draw minimap base: ", f"{time18 - time17:,}")
+                    print("Object movement and minimap draw: ", f"{time19 - time18:,}")
+                    print("Money and fuel display: ",  f"{time20 - time19:,}")
+                    print("Scale calculation: ", f"{time21 - time20:,}")
+                    print("debug settings and display.update():", f"{time22 - time21:,}")
+                    times.append([time12 - time1, time13 - time12, time14 - time13, time15 - time14, time16 - time15, time17 - time16, time18 - time17, time19 - time18, time20 - time19, time21 - time20])
+                    averages = [0 for _ in range(len(times[0]) + 1)]
+                    for x in times:
+                        for index, y in enumerate(x):
+                            averages[index] += y
+                        averages[-1] += sum(x)
+                    for x in range(len(averages)):
+                        averages[x] = averages[x] / len(times)
+                    print("Averages:", {y: f"{int(x):,}" for y,x in enumerate(averages)}, "| Count:", len(times))
+                    #print([time12 - time1, time13 - time12, time14 - time13, time15 - time14, time16 - time15, time17 - time16, time18 - time17, time19 - time18, time20 - time19, time21 - time20, time22 - time21])
+
+
 
 
         # Update the screen
         pygame.display.update()
 
+        time22 = get_time()
+
         # Apply running fps
         dt = timer.tick(fps) * 0.001
-
-
-def get_font(size):
-    return pygame.font.Font(path + "\\images\\font.ttf", size)
 
 def upgrades():
     while True:
@@ -308,7 +414,6 @@ def upgrades():
                     main_menu()
 
         pygame.display.update()
-
 
 def main_menu():
     while True:
@@ -348,6 +453,12 @@ def main_menu():
                     sys.exit()
 
         pygame.display.update()
+        timer.tick(fps)
 
 main_menu()
+
+    
+#pygame.quit()
+            
+    
         

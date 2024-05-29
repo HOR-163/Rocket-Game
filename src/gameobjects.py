@@ -2,13 +2,10 @@ import pygame
 from math import *
 
 from CONSTANTS import *
-from bezier import *
+from bezier_and_map import *
 from coordinate_systems import *
+from extra_graphics import *
 
-def draw_rect_alpha(surface, color, rect):
-    shape_surf = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
-    pygame.draw.rect(shape_surf, color, shape_surf.get_rect())
-    surface.blit(shape_surf, rect)
 
 """#################
    COLLISIONPOINT
@@ -41,21 +38,22 @@ class CollisionPoint:
 #########"""
 
 class Rocket(pygame.sprite.Sprite):
-    def __init__(self, x_pos, y_pos, acceleration, boost, max_speed, fuel, collision_points, image):
+    def __init__(self, position: tuple[float, float], acceleration, boost, max_speed, fuel, collision_points, image):
 
-        # Rocket's position TODO: convert position to tuple[int, int]
-        self.x_pos = x_pos
-        self.y_pos = y_pos
+        # Rocket's position 
+        self.position = position
+        # The camera view's center
+        self.screen_center = self.position
 
-        # Accelerattion
+        # Acceleration
         self.acceleration = acceleration
         self.boost = boost
 
-        # Speed and angle variables TODO: make speed a vector aka tuple[float, float]
+        # Speed and angle variables 
         self.max_speed = max_speed
         self.angle = 0
-        self.x_speed = 0
-        self.y_speed = 0
+        self.speed = (0,0)
+        self.air_speed = 0
 
         # fuel
         self.start_fuel = fuel
@@ -72,312 +70,245 @@ class Rocket(pygame.sprite.Sprite):
         self.image_size = self.image.get_width(), self.image.get_height()
         self.rect = self.image.get_rect()
         self.mask = pygame.mask.from_surface(self.image)
+        self.image_offset = (0,0)
 
         self.debug = True
 
+        # If the rocket goes through a thunder cloud, a timer will count down until rocket's systems restore
+        self.disabled = 0 # In seconds how long player can't control rocket
 
-
-
-    def draw(self, screen, scale: float, color):
+    def draw(self, screen, scale: float):
         # Put the image in the center of our imaginary "position point" aka when rotating the rocket
         # it rotates from the center, not from the upper left corner of the image (sprite)
         # Also apply scale to the rocket
-        x_image_offset = cubic_bezier(0, 0, 50, 0, 50, 100, 100, 100, self.x_speed / self.max_speed) #,screen, position=(WIDTH - 100, HEIGHT - 100))
-        y_image_offset = cubic_bezier(0, 0, 50, 0, 50, 100, 100, 100, self.y_speed / self.max_speed) #,screen, color='blue',position=(WIDTH - 100, HEIGHT- 200))
+        x_image_offset = cubic_bezier(0, 0, 50, 0, 50, 100, 100, 100, self.speed[0] / self.max_speed) #,screen, position=(WIDTH - 100, HEIGHT - 100))
+        y_image_offset = cubic_bezier(0, 0, 50, 0, 50, 100, 100, 100, self.speed[1] / self.max_speed) #,screen, color='blue',position=(WIDTH - 100, HEIGHT- 200))
+
+
         image_x = WIDTH / 2 - x_image_offset * WIDTH / (2 * 100)
         image_y = HEIGHT / 2 + y_image_offset * HEIGHT / (2 * 100)
+
+        self.image_offset = (image_x, image_y)
+        
 
         scaled_image = pygame.transform.scale(self.image, (self.image_size[0] * scale, self.image_size[1] * scale))
         scaled_rotated_image = pygame.transform.rotate(scaled_image, self.angle)
 
-        self.rect = scaled_rotated_image.get_rect(center = (image_x, image_y))
+        self.rect = scaled_rotated_image.get_rect(center = self.image_offset)
         self.mask = pygame.mask.from_surface(scaled_rotated_image)
 
-        if self.debug:
-            draw_rect_alpha(screen, color, self.rect)
         screen.blit(scaled_rotated_image, self.rect)
 
 
-        return (image_x, image_y)
-
-    def update(self, screen, dt, scale, keys, color):
+    def update(self, screen, dt, scale, keys, player):
         """ Update the rockets position."""
+        if self.disabled > 0:
+            self.disabled -= dt
+        
+        if self.disabled < 0:
+            self.disabled = 0
 
+        if self.fuel > 0:
+            self.vertical_input(keys)
+        
+        else:
+            self.fuel = 0
+            self.speed = (self.speed[0] + cos(radians(self.angle - 90)), self.speed[1] + GRAVITY)
+        
+        self.rotational_input(keys, dt)
+
+        # Limit the speeds to be in range of maximum speed
+        self.air_speed = sqrt(self.speed[0] ** 2 + self.speed[1] ** 2)
+        if self.air_speed > self.max_speed:
+            self.speed = (self.max_speed / self.air_speed * self.speed[0],
+                          self.max_speed / self.air_speed * self.speed[1])
+
+        self.position = (self.position[0] - self.speed[0] * dt,
+                         self.position[1] + self.speed[1] * dt)
+
+
+        self.screen_center = screen_to_world_coordinates((WIDTH  - self.image_offset[0], HEIGHT  - self.image_offset[1]), self.position, scale)
+
+        if self.position[1] > -C_HEIGHT:
+            lowest = None
+            for index, point in enumerate(self.collision_points):
+                point_y_position = point.screen_position[1]
+                if lowest is None or lowest.screen_position[1] < point_y_position:
+                    lowest = point
+
+            # If the lowest point intersects with ground
+            if screen_to_world_coordinates((None, lowest.screen_position[1]), self.screen_center, scale)[1] > HEIGHT / 2 + C_HEIGHT / 2:
+                if self.debug:
+                    pygame.draw.circle(screen, "green", lowest.screen_position, 3)
+
+                if self.speed[1] > 500:
+                    self.reset(player)
+                    return
+                
+                self.position = (self.position[0],
+                                 self.position[1] + world_to_screen_coordinates((None, HEIGHT / 2 + C_HEIGHT / 2 + 1), self.position, scale)[1] - lowest.screen_position[1])
+                self.speed = (self.speed[0] - self.speed[0] * GROUND_FRICTION, 0)
+
+        for index, point in enumerate(self.collision_points):
+            point.update(self.angle, self.image_offset[0], self.image_offset[1], scale)
+            if self.debug:
+                point.draw(screen, scale, self.image_size, self.image_offset, COLORS[index % 7], self.angle)
+    
+    def reset(self, player):
+        self.position = (WIDTH / 2, HEIGHT / 2)
+        self.speed = (0,0)
+        self.angle = 0
+        self.fuel = player.fuel
+
+    def vertical_input(self, keys):
+        if self.disabled > 0:
+            self.speed = (self.speed[0], self.speed[1] + GRAVITY)
+            return
         # Pressing up so add boost
         if keys[pygame.K_UP] or keys[pygame.K_w]:
-            self.x_speed += cos(radians(self.angle - 90)) * self.boost
-            self.y_speed += sin(radians(self.angle - 90)) * self.boost
+                self.speed = (self.speed[0] + cos(radians(self.angle - 90)) * self.boost,
+                              self.speed[1] + sin(radians(self.angle - 90)) * self.boost)
         # Pressing down, so no acceleration
-        elif (keys[pygame.K_DOWN] or keys[pygame.K_s]) and self.y_speed <= FALL_SPEED:
-            self.y_speed += GRAVITY
+        elif (keys[pygame.K_DOWN] or keys[pygame.K_s]):
+            self.speed = (self.speed[0], self.speed[1] + GRAVITY)
         # Pressing nothing, so we have to add acceleration
         else:
-            self.x_speed += cos(radians(self.angle - 90)) * self.acceleration
-            self.y_speed += sin(radians(self.angle - 90)) * self.acceleration
+            self.speed = (self.speed[0] + cos(radians(self.angle - 90)) * self.acceleration,
+                            self.speed[1] + sin(radians(self.angle - 90)) * self.acceleration)
             
-        
+        if not keys[pygame.K_s] and not keys[pygame.K_DOWN]:
+            self.fuel -= self.air_speed / 30000
+    
+    def rotational_input(self, keys, dt):
+        if self.disabled > 0:
+            return
         # Pressing right, so rotate rocket clockwise
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.angle -= 20 * dt
         # Pressing left, so rotate rocket counter-clockwise
         elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.angle += 20 * dt
-        #Pressing the "R" key, resets everything
-        if keys[pygame.K_r]:
-            self.reset()
-
-        # Limit the speeds to be in range of maximum speed
-        air_speed = sqrt(self.x_speed ** 2 + self.y_speed ** 2)
-        if air_speed > self.max_speed:
-            self.x_speed = self.max_speed / air_speed * self.x_speed
-            self.y_speed = self.max_speed / air_speed * self.y_speed
-        
-        self.x_pos -= self.x_speed * dt
-        self.y_pos += self.y_speed * dt
-
-        # print(x_offset_amount, y_offset_amount)
 
 
-
-        lowest = None
-        for index, point in enumerate(self.collision_points):
-            point_y_position = point.screen_position[1]
-            if lowest is None or lowest.screen_position[1] < point_y_position:
-                lowest = point
-
-        # If the lowest point intersects with ground
-        if screen_to_world_coordinates((None, lowest.screen_position[1]), self.position, scale)[1] > HEIGHT / 2 + C_HEIGHT / 2:
-            if self.debug:
-                pygame.draw.circle(screen, "green", lowest.screen_position, 3)
-            
-            self.y_pos += (world_to_screen_coordinates((None, HEIGHT / 2 + C_HEIGHT / 2 + 1), self.position, scale)[1] - lowest.screen_position[1])
-            self.x_speed = self.x_speed - self.x_speed * GROUND_FRICTION
-            self.y_speed = 0 
-
-        image_offset = self.draw(screen, scale, color)
-
-
-        for index, point in enumerate(self.collision_points):
-            point.update(self.angle, image_offset[0], image_offset[1], scale)
-            if self.debug:
-                point.draw(screen, scale, self.image_size, image_offset, COLORS[index % 8], self.angle)
-
-        return air_speed
-    
-    @property
-    def position(self):
-        return (self.x_pos, self.y_pos)
-    
-    def reset(self):
-        self.x_pos = WIDTH / 2
-        self.y_pos = HEIGHT / 2
-        self.x_speed = 0
-        self.y_speed = 0
-        self.angle = 0
-        self.fuel = self.start_fuel
 
 """#######################################
    GAMEOBJECTS (MONEY, FUEL, OBSTACLES)
 #######################################"""
 
 class Object(pygame.sprite.Sprite):
-    def __init__(self, object_type: str, level: int | None, position: tuple[int, int], image):
-        self.object_type = object_type # fuel, money
+    def __init__(self, type: str, level: int | None, position: tuple[int, int], image):
+        self.type = type 
         self.level = level # 1,2,3
         self.position = position # world position
         self.chunk_coordinates = world_to_chunk_coordinates(self.position)
 
         # All variables for drawing the object and collision detection
-        pygame.sprite.Sprite.__init__(self)
+        #pygame.sprite.Sprite.__init__(self)
+        super().__init__()
         self.image = image
         
         self.mask = pygame.mask.from_surface(self.image)
 
         self.image_size = self.image.get_width(), self.image.get_height()
-        self.rect = pygame.Rect(0,1000, self.image_size[0], self.image_size[1]) # move the rect to impossibly low, that the collsiion wouldn't occur on the first frame
+        self.rect = pygame.Rect(0,100000, self.image_size[0], self.image_size[1]) # move the rect to impossibly low, that the collsiion wouldn't occur on the first frame
 
-        self.scale_overwrite = 2
+        self.scale_overwrite = 1
 
-    def draw(self, screen, scale, rocket_position):
-        screen_position = world_to_screen_coordinates(self.position, rocket_position, scale)
+        if self.type in MOVING_OBJECTS:
+    
+            if "horisontal" in MOVING_OBJECTS[self.type]:
+                self.speed = (MOVING_OBJECTS[self.type]["horisontal"] * [-1,1][random.randint(0,1)],0)
+            elif "vertical" in MOVING_OBJECTS[self.type]:
+                self.speed = (0,MOVING_OBJECTS[self.type]["vertical"] * [-1,1][random.randint(0,1)])
+            elif "all" in MOVING_OBJECTS[self.type]:
+                self.speed = (MOVING_OBJECTS[self.type]["all"] * [-1,1][random.randint(0,1)],
+                                     MOVING_OBJECTS[self.type]["all"] * [-1,1][random.randint(0,1)])
+        else:
+            self.speed = (0,0)
+
+    def draw(self, screen, scale, screen_center):
+        screen_position = world_to_screen_coordinates(self.position, screen_center, scale)
         if (screen_position[0] >= 0 - self.image_size[0] * 2 and 
             screen_position[0] <= WIDTH + self.image_size[0] * 2 and 
             screen_position[1] >= 0 - self.image_size[1] * 2 and 
             screen_position[1] <= HEIGHT + self.image_size[1] * 2 and 
-            self.chunk_coordinates[1] >= 2):
+            self.position[1] <= MINIMUM_OBJECT_HEIGHT):
             
             scaled_image = pygame.transform.scale(self.image, (self.image_size[0] * scale * self.scale_overwrite, self.image_size[1] * scale * self.scale_overwrite))
             self.mask = pygame.mask.from_surface(scaled_image)
             self.rect = scaled_image.get_rect(center = screen_position)
             screen.blit(scaled_image, self.rect)
-
-# List of money, fuel and obstacles (all that need collision detection)
-collision_group = pygame.sprite.Group()
-
-# Just used for the first time
-last_chunk_coordinates = (0,0)
-
-def create_objects_for_the_first_time(images: dict) -> None:
-    global objects
-
-    for object_type in powerup_amounts: # Go through all powerup types
-        for _ in range(powerup_amounts[object_type]): # Amount of powerups
-            random_coordinates = create_random_coordinates(chunk_to_world_coordinates((-generation_radius, generation_radius)), 
-                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT * (generation_radius * 2 + 1)))
-            if object_type == "money":
-                object_level = get_money_level(world_to_chunk_coordinates(random_coordinates))
-                collision_group.add(Object(object_type, object_level, random_coordinates, images[object_level]))
-            
-            elif object_type == "fuel":
-                object_level = get_fuel_level(world_to_chunk_coordinates(random_coordinates))
-                collision_group.add(Object(object_type, object_level, random_coordinates, images[object_level + 3]))
     
-    # Create x amount of obstacles 
+    def move_towards(self, target_position, target_speed, player, dt):
+        if self.position[1] <= MINIMUM_OBJECT_HEIGHT:
+            move_vector = (target_position[0] - self.position[0], target_position[1] - self.position[1])
+            vector_length = move_vector[0] ** 2 + move_vector[1] ** 2
+            if vector_length <= player.magnet_radius ** 2:
+                self.speed = ((-target_speed[0] + (move_vector[0] / vector_length) * 30000) * dt, 
+                                (target_speed[1] + (move_vector[1] / vector_length) * 30000) * dt)
+    
 
-    for _ in range(obstacle_amount):
-        random_coordinates = create_random_coordinates(chunk_to_world_coordinates((-generation_radius, generation_radius)), 
-                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT * (generation_radius * 2 + 1)))
-        # Get the first level of obstacles, then get a random obstacle type from there
-        object_type = obstacle_types[1][random.randint(0, len(obstacle_types[1])) - 1] # len - 1 (lists start from 0)
-        collision_group.add(Object(object_type, 1, random_coordinates, images[object_type])) # Instead of 1, there could be None, because that value is unused for obstacles
+    def update(self):
+        if self.speed[0] != 0 and self.speed[1] != 0:
+            self.position = (self.position[0] + self.speed[0], self.position[1] + self.speed[1])
+            self.chunk_coordinates = world_to_chunk_coordinates(self.position)
 
-
-def reset_objects(images: dict) -> None:
-    for object in collision_group:
-        object_type = object.object_type
-        object_level = object.level
-        random_coordinates = create_random_coordinates(chunk_to_world_coordinates((-generation_radius, generation_radius)), 
-                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT * (generation_radius * 2 + 1)))
-        if object_type == "money":
-            object_level = get_money_level(world_to_chunk_coordinates(random_coordinates))
-            object.__init__(object_type, object_level, random_coordinates, images[object_level])
         
-        elif object_type == "fuel":
-            object_level = get_fuel_level(world_to_chunk_coordinates(random_coordinates))
-            object.__init__(object_type, object_level, random_coordinates, images[object_level + 3])
+        
 
-        elif object_type in all_obstacles:
-            # Get the first level of obstacles, then get a random obstacle type from there
-            object_type = obstacle_types[1][random.randint(0, len(obstacle_types[1])) - 1] # len - 1 (lists start from 0)
-            object.__init__(object_type, 1, random_coordinates, images[object_type]) # Instead of 1, there could be None, because that value is unused for obstacles
+class MiniMap:
+    def __init__(self, visibility_radius):
 
+        margin = (10,10)
 
+        self.size = (WIDTH / 4, HEIGHT / 4)
+        self.position = (WIDTH - self.size[0] - margin[0], 0 + margin[1])
+        self.rect = pygame.Rect(self.position[0], self.position[1], self.size[0], self.size[1])
+
+        self.bg_color = (0,0,0,128)
+
+        self.visibility_radius = visibility_radius
+
+    def draw_base(self, screen, rocket_position):
+        draw_rect_alpha(screen, self.bg_color, self.rect)
+
+        # Draw the ground
+        ground_position = self.world_to_map_coordinates((0, (HEIGHT + C_HEIGHT) // 2), rocket_position)
+        if self.rect.top <= ground_position[1] <= self.rect.bottom:
+            pygame.draw.rect(screen, GROUND_COLOR, pygame.Rect(self.rect.left, ground_position[1], self.size[0], self.rect.bottom - ground_position[1] + 1))
+
+    def draw(self, screen, rocket_position, object, DEBUG):
+        if object.type == "money":
+            color = (0, 255, 0)
+            object_level = object.level
+        elif object.type == "fuel":
+            color = (255, 255, 0)
+            object_level = object.level
+        elif object.type in ALL_OBSTACLES:
+            color = (255, 0, 0)
+            object_level = 3
+
+        # Draw the objects
+        if DEBUG:
+            map_coordinates = self.world_to_map_coordinates(object.position, rocket_position)
+            if (self.rect.left <= map_coordinates[0] <= self.rect.right and self.rect.top <= map_coordinates[1] <= self.rect.bottom):
+                pygame.draw.circle(screen, color, map_coordinates, object_level)
+
+        elif object.position[1] < -C_HEIGHT / 2 - C_HEIGHT:
+            map_coordinates = self.world_to_map_coordinates(object.position, rocket_position)
+            if (self.rect.left <= map_coordinates[0] <= self.rect.right and self.rect.top <= map_coordinates[1] <= self.rect.bottom):
+                pygame.draw.circle(screen, color, map_coordinates, object_level)
             
-def update_objects(chunk_coordinates: tuple[int, int], images) -> None:
-    global last_chunk_coordinates
+            
+            
+            
 
-    if last_chunk_coordinates != chunk_coordinates:
+        pygame.draw.circle(screen, 'white', (self.rect.left + self.rect.width / 2, self.rect.top + self.rect.height / 2), 2)
+    
+    def world_to_map_coordinates(self, world_coordinates: tuple[int, int], rocket_position):
+        map_x, map_y = 0, 0
+        normalised_coordinates = (world_coordinates[0] - rocket_position[0] + (self.visibility_radius + 0.5) * C_WIDTH, world_coordinates[1] - rocket_position[1] + (self.visibility_radius + 0.5) * C_HEIGHT)
+        map_x = map_value(normalised_coordinates[0], 0, (self.visibility_radius * 2 + 1) * C_WIDTH, 0, self.size[0]) + self.rect.left
+        map_y = map_value(normalised_coordinates[1], 0, (self.visibility_radius * 2 + 1) * C_HEIGHT, 0, self.size[1]) + self.rect.top
 
-        # See if some powerups could be removed
-        for object in collision_group:
-            if object.chunk_coordinates[1] < chunk_coordinates[1] - generation_radius: # object is too low
-                create_new_object(object, chunk_coordinates, "up", images)
-            elif object.chunk_coordinates[1] > chunk_coordinates[1] + generation_radius: # object is too high
-                create_new_object(object, chunk_coordinates, "down", images)
-            elif object.chunk_coordinates[0] < chunk_coordinates[0] - generation_radius: # object is too left
-                create_new_object(object, chunk_coordinates, "right", images)
-            elif object.chunk_coordinates[0] > chunk_coordinates[0] + generation_radius: # object is too right
-                create_new_object(object, chunk_coordinates, "left", images)
-        last_chunk_coordinates = chunk_coordinates
-
-def get_money_level(chunk_coordinates: tuple[int,int]) -> int:
-    # Create the odds of each powerup to be created
-    if chunk_coordinates[1] + 1 < 100:
-        coin_percent = 100 - 100 * (chunk_coordinates[1] + 2) / 400
-        cash_percent = 100 - coin_percent
-        #money_bag_percent = 0
-    elif chunk_coordinates[1] + 1 >= 100 and chunk_coordinates[1] + 1 <= 199:
-        coin_percent = 50 - 50 * (chunk_coordinates[1] - 100 + 2) / 250
-        cash_percent = 50 + 50 * (chunk_coordinates[1] - 100 + 2) / 500
-        #money_bag_percent = 100 - coin_percent - cash_percent
-    elif chunk_coordinates[1] + 1 >= 200:
-        coin_percent = 20
-        cash_percent = 60
-        #money_bag_percent = 20
-
-    # Create a random number to find the level of fuel
-    rng = random.randint(0,100)
-
-    if rng < coin_percent:
-        # make a coin
-        return 1
-    elif rng >= coin_percent and rng < coin_percent + cash_percent:
-        # make a cash
-        return 2
-    # make a money_bag
-    return 3
-
-def get_fuel_level(chunk_coordinates: tuple[int,int]) -> int:
-    # Create the odds of each powerup to be created
-    if chunk_coordinates[1] + 1 < 100:
-        small_percent = 100 - 100 * (chunk_coordinates[1] + 2) / 400
-        medium_percent = 100 - small_percent
-        #large_percent = 0
-    elif chunk_coordinates[1] + 1 >= 100 and chunk_coordinates[1] + 1 <= 199:
-        small_percent = 50 - 50 * (chunk_coordinates[1] - 100 + 2) / 250
-        medium_percent = 50 + 50 * (chunk_coordinates[1] - 100 + 2) / 500
-        #large_percent = 100 - small_percent - medium_percent
-    elif chunk_coordinates[1] + 1 >= 200:
-        small_percent = 20
-        medium_percent = 60
-        #large_percent = 20
-
-    # Create a random number to find the level of fuel
-    rng = random.randint(0,100)
-        
-    if rng < small_percent:
-        # make a coin
-        return 1
-    elif rng >= small_percent and rng < small_percent + medium_percent:
-        # make a cash
-        return 2
-    # make a money_bag
-    return 3
-
-def get_obstacle_level(chunk_coordinates: tuple[int, int]) -> int:
-    if chunk_coordinates[1] < 100:
-        return 1
-    elif chunk_coordinates[1] < 200:
-        return 2
-    elif chunk_coordinates[1] >= 200:
-        return 3
-
-def create_new_object(object, chunk_coordinates: tuple[int, int], direction: str, images: dict) -> None:
-    object_type = object.object_type
-
-    # Create random coordinates, where the powerup is going to be placed
-    if direction == "up":
-        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - generation_radius,         # start_x
-                                                                            chunk_coordinates[1] + generation_radius - 1)),       # start_y
-                                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT))   # size
-    elif direction == "down":
-        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - generation_radius,         # start_x
-                                                                            chunk_coordinates[1] - generation_radius - 1)),       # start_y
-                                                                            (C_WIDTH * (generation_radius * 2 + 1), C_HEIGHT))    # size
-    elif direction == "right":
-        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] + generation_radius - 1,     # start_x
-                                                                            chunk_coordinates[1] + generation_radius)),           # start_y
-                                                                            (C_WIDTH, C_HEIGHT * (generation_radius * 2 + 1)))    # size
-    elif direction == "left":
-        random_position = create_random_coordinates(chunk_to_world_coordinates((chunk_coordinates[0] - generation_radius - 1,     # start_x
-                                                                            chunk_coordinates[1] + generation_radius)),           # start_y
-                                                                            (C_WIDTH, C_HEIGHT * (generation_radius * 2 + 1)))    # size
-
-    # Create powerups according to their type
-    if object_type == "money":
-        object_level = get_money_level(chunk_coordinates)
-        object.__init__(object_type, object_level, random_position, images[object_level])
-
-    elif object_type == "fuel":
-        object_level = get_fuel_level(chunk_coordinates)
-        object.__init__(object_type, object_level, random_position, images[object_level + 3])
-    elif object_type in all_obstacles:
-        obstacle_level = get_obstacle_level(chunk_coordinates)
-        obstacle_type = obstacle_types[obstacle_level][random.randint(0, len(obstacle_types[obstacle_level]) - 1)]
-        object.__init__(obstacle_type, obstacle_level, random_position, images[obstacle_type])
-
-
-class Player():
-    def __init__(self, starting_money = 100) :
-        self.starting_money = starting_money
-        self.money = starting_money
+        return (map_x, map_y)

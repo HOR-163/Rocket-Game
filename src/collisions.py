@@ -1,50 +1,53 @@
 import pygame
-from gameobjects import Rocket, Player, create_objects_for_the_first_time, reset_objects
-from CONSTANTS import all_obstacles
+from pygame.math import Vector2
+from math import *
 
-def check_collisions(player: Player, rocket: Rocket, collision_group: pygame.sprite.Group, images: dict) -> tuple[int, int, int]:
+from gameobjects import Rocket
+from player import Player
+from gameobject_scripts import reset_objects
+from CONSTANTS import *
+from coordinate_systems import *
+from bezier_and_map import map_value
 
+
+def check_collisions(player: Player, rocket: Rocket, collision_group: pygame.sprite.Group, images: dict) -> None:
+
+    current_precollisions = pygame.sprite.spritecollide(rocket, collision_group, False)
     # Collision detection
-    if pygame.sprite.spritecollide(rocket, collision_group, False): # Maybe haven't collided yet, but powerup is in the boundary rect of rocket
-        color = (0, 255, 0, 50)
+    if current_precollisions: # Haven't collided yet, but object is in the radius of the rocket
+
         current_collisions = pygame.sprite.spritecollide(rocket, collision_group, False, pygame.sprite.collide_mask)
 
         if current_collisions: # Collided
             for object in current_collisions:
-                object_type = object.object_type
-                object_level = object.level
 
-                if object_type == "money":
-                    player.money += {1: 1,2: 10, 3: 50}[object_level]
+                if object.type == "money":
+                    player.money += MONEY_VALUES[object.level]
 
-                elif object_type == "fuel":
-                    rocket.fuel += {1: 1, 2: 10, 3: 50}[object_level]
+                elif object.type == "fuel":
+                    rocket.fuel += FUEL_VALUES[object.level]
 
-                elif object_type in all_obstacles:
+                elif object.type in SOLID_OBSTACLES:
+
                     # GAME OVER
                     print(f"""
                           ######################
                           -------GAMEOVER-------
                           ######################
-                          Because: {object_type}""")
-                    rocket.reset()
-
-                    reset_objects(images)
-
-                    print(len(collision_group))
-
-                    player.money = player.starting_money
-                    object.position = (0, 100000000)
-                    current_collisions = []
-                    return color
+                          Because: {object.type}""")
+                    rocket.reset(player)
                     
 
-                if object_type == "money" or object_type == "fuel":
-                    object.__init__(object_type, object_level, (0, 10000), images[None])
-                    print("money: " , player.money, "| fuel: ", rocket.fuel)
+                    reset_objects(collision_group, images)
 
-                
-            color = (255,0,0, 50)
-    else: # Didn't collide
-        color = (0,0,0, 50)
-    return color
+                    object.position = Vector2(0,10000000)
+                    current_collisions = []
+                    player.deaths += 1
+                    player.save_data()
+
+                elif object.type == "cloud" and rocket.disabled == 0:
+                    rocket.disabled = map_value(random.random(), 0, 1, MINIMUM_DISABLED, MAXIMUM_DISABLED) # Amount of seconds the rocket will be disabled
+
+                if object.type in COLLECTIBLE_OBJECTS:
+                    object.__init__(object.type, object.level, (0, 10000), images[None])
+            return True

@@ -1,3 +1,4 @@
+from pygame.math import Vector2
 from CONSTANTS import *
 import random
 
@@ -53,3 +54,24 @@ def create_random_coordinates(coordinates: tuple[int, int], size: tuple[int, int
     """Create random coordinates in a rectangle that starts from coordinates and has a size"""
     return (random.randint(coordinates[0], coordinates[0] + size[0]), 
             random.randint(coordinates[1], coordinates[1] + size[1]))
+
+
+
+
+
+
+def V_world_to_screen_coordinates(world_coords: Vector2, rocket_position: tuple[int, int], scale: float) -> tuple[int | None, int | None]:
+    """Convert world coordinates to screen coordinates."""
+    screen_x = int((-rocket_position[0] + world_coords.x) * scale + WIDTH // 2)
+    screen_y = int((-rocket_position[1] + world_coords.y) * scale + HEIGHT // 2)
+
+    return (screen_x, screen_y)
+
+
+def V_world_to_chunk_coordinates(world_coords: Vector2) -> tuple[int | None, int | None]:
+    """#### Convert world coordinates to chunk coordinates."""
+
+    chunk_x = int((world_coords.x - (WIDTH - C_WIDTH) // 2) // C_WIDTH)
+    chunk_y = - int((world_coords.y + (HEIGHT - C_HEIGHT) // 2) // C_HEIGHT)
+
+    return (chunk_x, chunk_y)

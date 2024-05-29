@@ -1,6 +1,7 @@
 
 import pygame
 from CONSTANTS import *
+
 def cubic_bezier(x1: int, y1: int, x2: int, y2: int, x3: int, y3: int, x4: int, y4: int, t: float, screen = None, color = (255,0,0), position = (WIDTH - 100, HEIGHT - 100)) -> float:
     """Given 2 anchors (control points) and 2 handles, calculate the y coordinate of given cubic bezier curve.
     x1, y1 - control point 1
@@ -36,3 +37,7 @@ def cubic_bezier(x1: int, y1: int, x2: int, y2: int, x3: int, y3: int, x4: int, 
     if negative:
          return -y / 2
     return y / 2 
+
+
+def map_value(x: float, in_min: float, in_max: float, out_min: float, out_max: float):
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min

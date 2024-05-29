@@ -5,7 +5,7 @@ PATH = os.getcwd()
 #PATH = PATH[:PATH.rfind("\\") + 1] # <------- This one
 
 # Screen size
-WIDTH: int = 1600
+WIDTH: int = 1000
 HEIGHT: int = 750
 
 # Size of background chunks

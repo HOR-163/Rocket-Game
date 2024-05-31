@@ -6,21 +6,15 @@ class Player():
         self.default_data = default_data # Default data
         
         # Live data
-        self.money = self.default_data["starting_money"]
-        self.fuel = self.default_data["starting_fuel"]
-        self.magnet_radius = self.default_data["magnet_radius"]
-        self.minimap_radius = self.default_data["minimap_radius"]
-        self.upgrades = self.default_data["upgrades"]
+        self.money = self.default_data["money"]
+        self.fuel_level = self.default_data["fuel_level"]
+        self.starting_fuel = self.default_data["starting_fuel"]
+        self.starting_speed = self.default_data["starting_speed"]
+        self.magnet_level = self.default_data["magnet_level"]
+        self.map_level = self.default_data["map_level"]
+        self.max_speed_level = self.default_data["max_speed_level"]
 
         self.deaths = 0
-    
-    """ def update_data(self) -> dict:
-        self.data["starting_money"] = self.starting_money
-        self.data["starting_fuel"] = self.starting_fuel
-        self.data["magnet_radius"] = self.magnet_radius
-        self.data["minimap_radius"] = self.minimap_radius
-        self.data["upgrades"] = self.upgrades
-        return self.data """
     
     def load_data(self) -> dict:
         state = 2 # Everything loaded correctly
@@ -32,68 +26,36 @@ class Player():
         except:
             save_data = {}
             state = 0
-            reasons.append("FILENOTFOUND")
+            reasons.append("FILENOTFOUNDORCORRUPTED")
 
-            self.money = self.default_data["starting_money"]
-            self.fuel = self.default_data["starting_fuel"]
-            self.magnet_radius = save_data["magnet_radius"]
-            self.minimap_radius = self.default_data["minimap_radius"]
-            self.upgrades = self.default_data["upgrades"]
+            self.money = self.default_data["money"]
+            self.fuel_level = self.default_data["fuel_level"]
+            self.starting_fuel = self.default_data["starting_fuel"]
+            self.starting_speed = self.default_data["starting_speed"]
+            self.magnet_level = self.default_data["magnet_level"]
+            self.map_level = self.default_data["map_level"]
+            self.max_speed_level = self.default_data["max_speed_level"]
             self.deaths = 0
 
             return {state: reasons}
 
-        try:
-            self.money = save_data["money"]
-        except KeyError:
-            self.money = self.default_data["starting_money"]
-            state = 1
-            reasons.append("money")
-
-
-        try:
-            self.fuel = save_data["fuel"]
-        except KeyError:
-            self.fuel = self.default_data["starting_fuel"]
-            state = 1
-            reasons.append("fuel")
-
-        try:
-            self.magnet_radius = save_data["magnet_radius"]
-        except KeyError:
-            self.magnet_radius = self.default_data["magnet_radius"]
-            state = 1
-            reasons.append("magnet_radius")
-
-        try:
-            self.minimap_radius = save_data["minimap_radius"]
-        except KeyError:
-            self.minimap_radius = self.default_data["minimap_radius"]
-            state = 1
-            reasons.append("minimap_radius")
-
-        try:
-            self.upgrades = save_data["upgrades"]
-        except KeyError:
-            self.upgrades = self.default_data["upgrades"]
-            state = 1
-            reasons.append("upgrades")
-
-        try:
-            self.deaths = save_data["deaths"]
-        except KeyError:
-            self.deaths = 0
-            state = 1
-            reasons.append("deaths")
-
-        return {state: reasons}
+        self.money = save_data["money"]
+        self.fuel_level = save_data["fuel_level"]
+        self.starting_fuel = save_data["starting_fuel"]
+        self.starting_speed = save_data["starting_speed"]
+        self.magnet_level = save_data["magnet_level"]
+        self.map_level = save_data["map_level"]
+        self.max_speed_level = save_data["max_speed_level"]
+        self.deaths = save_data["deaths"]
 
     def save_data(self) -> bool:
         data = {"money": self.money,
-                "fuel": self.fuel,
-                "magnet_radius": self.magnet_radius,
-                "minimap_radius": self.minimap_radius,
-                "upgrades": self.upgrades,
+                "fuel_level": self.fuel_level,
+                "starting_fuel": self.starting_fuel,
+                "starting_speed": self.starting_speed,
+                "magnet_level": self.magnet_level,
+                "map_level": self.map_level,
+                "max_speed_level": self.max_speed_level,
                 "deaths": self.deaths}
         with open(PATH + "/save_data.json", "w") as f:
             json.dump(data, f, ensure_ascii=True, indent=4)

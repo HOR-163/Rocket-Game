@@ -1,5 +1,6 @@
 # Ignore all pycache files (they will be created before runtime)
 *.pyc
 
-# Ignore a test file that I have
+# Ignore test files
 collision_test.py
+ui_test.py

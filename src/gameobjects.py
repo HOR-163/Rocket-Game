@@ -81,8 +81,8 @@ class Rocket(pygame.sprite.Sprite):
         # Put the image in the center of our imaginary "position point" aka when rotating the rocket
         # it rotates from the center, not from the upper left corner of the image (sprite)
         # Also apply scale to the rocket
-        x_image_offset = cubic_bezier(0, 0, 50, 0, 50, 100, 100, 100, self.speed[0] / self.max_speed) #,screen, position=(WIDTH - 100, HEIGHT - 100))
-        y_image_offset = cubic_bezier(0, 0, 50, 0, 50, 100, 100, 100, self.speed[1] / self.max_speed) #,screen, color='blue',position=(WIDTH - 100, HEIGHT- 200))
+        x_image_offset = cubic_bezier(0, 0, 50, 0, 50, self.max_speed / 20, 100, self.max_speed / 20, self.speed[0] / self.max_speed) #,screen, position=(WIDTH - 100, HEIGHT - 100))
+        y_image_offset = cubic_bezier(0, 0, 50, 0, 50, self.max_speed / 20, 100, self.max_speed / 20, self.speed[1] / self.max_speed) #,screen, color='blue',position=(WIDTH - 100, HEIGHT- 200))
 
 
         image_x = WIDTH / 2 - x_image_offset * WIDTH / (2 * 100)
@@ -141,7 +141,7 @@ class Rocket(pygame.sprite.Sprite):
                 if self.debug:
                     pygame.draw.circle(screen, "green", lowest.screen_position, 3)
 
-                if self.speed[1] > 500:
+                if self.speed[1] > 500 or self.fuel == 0:
                     self.reset(player)
                     return
                 
@@ -158,7 +158,7 @@ class Rocket(pygame.sprite.Sprite):
         self.position = (WIDTH / 2, HEIGHT / 2)
         self.speed = (0,0)
         self.angle = 0
-        self.fuel = player.fuel
+        self.fuel = player.starting_fuel + player.fuel_level * FUEL_LEVEL_MULTIPLIER
 
     def vertical_input(self, keys):
         if self.disabled > 0:
@@ -169,7 +169,7 @@ class Rocket(pygame.sprite.Sprite):
                 self.speed = (self.speed[0] + cos(radians(self.angle - 90)) * self.boost,
                               self.speed[1] + sin(radians(self.angle - 90)) * self.boost)
         # Pressing down, so no acceleration
-        elif (keys[pygame.K_DOWN] or keys[pygame.K_s]):
+        elif (keys[pygame.K_DOWN] or keys[pygame.K_s]) and self.speed[1] <= FALL_SPEED:
             self.speed = (self.speed[0], self.speed[1] + GRAVITY)
         # Pressing nothing, so we have to add acceleration
         else:
@@ -226,7 +226,7 @@ class Object(pygame.sprite.Sprite):
         else:
             self.speed = (0,0)
 
-    def draw(self, screen, scale, screen_center):
+    def draw(self, screen, screen_center, scale):
         screen_position = world_to_screen_coordinates(self.position, screen_center, scale)
         if (screen_position[0] >= 0 - self.image_size[0] * 2 and 
             screen_position[0] <= WIDTH + self.image_size[0] * 2 and 
@@ -243,7 +243,7 @@ class Object(pygame.sprite.Sprite):
         if self.position[1] <= MINIMUM_OBJECT_HEIGHT:
             move_vector = (target_position[0] - self.position[0], target_position[1] - self.position[1])
             vector_length = move_vector[0] ** 2 + move_vector[1] ** 2
-            if vector_length <= player.magnet_radius ** 2:
+            if vector_length <= (player.magnet_level * MAGNET_LEVEL_MULTIPLIER)  ** 2:
                 self.speed = ((-target_speed[0] + (move_vector[0] / vector_length) * 30000) * dt, 
                                 (target_speed[1] + (move_vector[1] / vector_length) * 30000) * dt)
     
@@ -277,7 +277,7 @@ class MiniMap:
         if self.rect.top <= ground_position[1] <= self.rect.bottom:
             pygame.draw.rect(screen, GROUND_COLOR, pygame.Rect(self.rect.left, ground_position[1], self.size[0], self.rect.bottom - ground_position[1] + 1))
 
-    def draw(self, screen, rocket_position, object, DEBUG):
+    def draw(self, screen, rocket_position, object, DEBUG=False):
         if object.type == "money":
             color = (0, 255, 0)
             object_level = object.level

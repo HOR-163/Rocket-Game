@@ -19,7 +19,7 @@ from collisions import check_collisions
 from player import *
 from gameobject_scripts import *
 from background import *
-from button import *
+from ui_elements import *
 
 import debug
 
@@ -70,10 +70,17 @@ ground = pygame.image.load(PATH + "/images/ground.png").convert_alpha()
 wind_right = pygame.image.load(PATH + "/images/wind_right.png").convert_alpha()
 wind_left = pygame.image.load(PATH + "/images/wind_left.png").convert_alpha()
 danger = pygame.image.load(PATH + "/images/danger.png").convert_alpha()
+
+# Progress bar with steps
+right_arrow_default = pygame.image.load(PATH + "/images/right_arrow_default.png").convert_alpha()
+right_arrow_hover = pygame.image.load(PATH + "/images/right_arrow_hover.png").convert_alpha()
+left_arrow_default = pygame.image.load(PATH + "/images/left_arrow_default.png").convert_alpha()
+left_arrow_hover = pygame.image.load(PATH + "/images/left_arrow_hover.png").convert_alpha()
+
 BG = pygame.image.load(PATH + "/images/MenuBackground.png")
 BG = pygame.transform.scale(BG, (WIDTH, HEIGHT))
 
-
+bg_col = (0,0,0,128)
 
 images = {1: coin_img, 2: cash_img, 3: money_bag_img,
           4: small_fuel_img, 5: medium_fuel_img, 6: large_fuel_img,
@@ -113,62 +120,9 @@ def input():
     
     return keys
 
-""" wind_strength = 0
-wind_duration = [2,4] # [x,y] aka x to y seconds
-wind_timer = 0 """
-
-
-""" # Points on the corners of the rocket (size in px, coords origin is the center of the rocket)
-collision_points = [[-25,50],[25,50],[-25,-50],[25,-50]]
-#                 start_x,  start_y,    acceleration,
-#                    |         |        |  boost acceleration,
-#                    |         |        |  |   maximum speed
-#                    |         |        |  |   |    points for collision
-#                    |         |        |  |   |    |
-rocket = Rocket(WIDTH / 2, HEIGHT / 2, 4, 8, 2000, collision_points, rocket_image_og) """
-
-
-# INITialize the objects
-collision_points = [[1,49],[25,-1],[13,-50],[-11,-50], [-23,-1]]
-#                 start_x,  start_y,    acceleration,
-#                    |         |        |  boost acceleration,
-#                    |         |        |  |   maximum speed
-#                    |         |        |  |   |    start_fuel
-#                    |         |        |  |   |    |           points for collision
-#                    |         |        |  |   |    |           |                image
-#                    |         |        |  |   |    |           |                |
-rocket = Rocket((WIDTH / 2, HEIGHT / 2), 4, 8, 2000, 100, collision_points, rocket_image) # Rocket in gameobjects.py
-
-
+# HAS TO ALWAYS BE HERE, SO THAT ALL FUNCTION (PLAY, UPGRADE, ...) CAN REACH IT
 player = Player(DEFAULT_PLAYER_DATA) # all of it in player.py
-print(player.load_data())
 
-
-background = Background(2 * CHUNK_GEN_RADIUS + 1, debug_font) # Background in background.py
-
-minimap = MiniMap(player.minimap_radius) # Minimap in gameobjects.py
-
-""" first = True 
-
-run = True """
-
-clouds = pygame.sprite.Group()
-clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_0, 1.2))
-clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_1, 1.15))
-clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_2, 1.1))
-
-clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_3, 1.05))
-clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_4, 1.03))
-clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_5, 1.01))
-
-
-
-""" collision_debug_color = (0,0,0, 128)
-
-# Used for debugging framerate and performance
-time1, time2 = 0, 0
-highest_dt = 0.0
-dt = 0.016 """
 
 def get_time():
     return time.perf_counter_ns()
@@ -176,7 +130,140 @@ def get_time():
 def get_font(size):
     return pygame.font.Font(PATH + "/images/font.ttf", size)
 
+def draw_ui(rocket, wind_strength, scale):
+    money_and_fuel = debug_font.render(f"Money: {player.money} | Fuel: {round(rocket.fuel,0)}", True, 'black', 'white')
+    screen.blit(money_and_fuel, (WIDTH // 2 - money_and_fuel.get_width() // 2, 0))
+
+    if rocket.disabled > 0:
+        if (rocket.disabled - int(rocket.disabled) < 0.5):
+                screen.blit(danger, (WIDTH / 2 - danger.get_width() / 2, HEIGHT / 2 - danger.get_height() / 2))
+
+        
+    if wind_strength < 0:
+        wind_scaled_image = pygame.transform.scale_by(wind_right, scale)
+        arrow_position = world_to_screen_coordinates(rocket.position, rocket.screen_center, scale)
+        arrow_position = (arrow_position[0] + 75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
+        screen.blit(wind_scaled_image, arrow_position)
+        
+    if wind_strength > 0:
+        wind_scaled_image = pygame.transform.scale_by(wind_left, scale)
+        arrow_position = world_to_screen_coordinates(rocket.position, rocket.screen_center, scale)
+        arrow_position = (arrow_position[0] -  75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
+        screen.blit(wind_scaled_image, arrow_position)
+
+def pause_menu(rocket, background, minimap,chunk_coordinates, collision_group, clouds, wind_strength, scale):
+    keys = input()
+    game_state = PAUSED
+    run = True
+    
+    screen.fill(gradient(chunk_coordinates[1] + 2))
+
+    background.update(screen, scale, rocket.position, ground)
+
+    for cloud in clouds:
+        cloud.draw(screen, rocket.screen_center, scale)
+
+    rocket.draw(screen, scale)
+    if player.map_level > 0:
+        minimap.draw_base(screen, rocket.position)
+
+    for object in collision_group:
+        object.draw(screen, rocket.screen_center, scale)
+        if player.map_level > 0:
+            minimap.draw(screen, rocket.position, object)
+
+    draw_ui(rocket, wind_strength, scale)
+
+    draw_rect_alpha(screen, (0,0,0,50), pygame.Rect(0,0,WIDTH, HEIGHT))
+
+    MOUSE_POS = pygame.mouse.get_pos()
+
+    MENU_TEXT = get_font(100).render("PAUSED", True, TEXT_HEADER_COLOR)
+    MENU_RECT = MENU_TEXT.get_rect(center=(WIDTH / 2, 100))
+
+    # All avaliable buttons on the screen
+    CONTINUE_BUTTON = Button((WIDTH / 2, 250), "CONTINUE", get_font(70), TEXT_DEFAULT_COLOR, TEXT_HOVER_COLOR, bg_color = TEXT_BACKGROUND_COLOR)
+    RESTART_BUTTON = Button((WIDTH / 2, 400), "RESTART", get_font(70), TEXT_DEFAULT_COLOR, TEXT_HOVER_COLOR, bg_color = TEXT_BACKGROUND_COLOR)
+    MAIN_MENU_BUTTON = Button((WIDTH / 2, 550), "MAIN MENU", get_font(70), TEXT_DEFAULT_COLOR, TEXT_HOVER_COLOR, bg_color = TEXT_BACKGROUND_COLOR)
+
+    screen.blit(MENU_TEXT, MENU_RECT)
+
+    for button in [CONTINUE_BUTTON, RESTART_BUTTON, MAIN_MENU_BUTTON]:
+        button.changeColor(MOUSE_POS)
+        button.update(screen)
+
+    for event in pygame.event.get():
+        if event.type == pygame.KEYUP:
+            if keys[pygame.K_SPACE]:
+                game_state = PLAYING
+                break
+            elif keys[pygame.K_ESCAPE]:
+                player.save_data()
+                run = False
+                break
+        if event.type == pygame.QUIT:
+            player.save_data()
+            pygame.quit()
+            sys.exit()
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if CONTINUE_BUTTON.checkForInput(MOUSE_POS):
+                game_state = PLAYING
+                break
+            if RESTART_BUTTON.checkForInput(MOUSE_POS):
+                player.save_data()
+                rocket.reset(player)
+                reset_objects(collision_group, images)
+                wind_strength = 0
+                game_state = PLAYING
+                break
+            if MAIN_MENU_BUTTON.checkForInput(MOUSE_POS):
+                player.save_data()
+                run = False
+                break
+
+
+    pygame.display.update()
+    timer.tick(fps)
+
+    return game_state, run
+    
+
 def play():
+
+    print(player.load_data())
+
+    # INITialize the objects
+    collision_points = [[1,49],[25,-1],[13,-50],[-11,-50], [-23,-1]]
+
+    max_speed = player.starting_speed + player.max_speed_level * ROCKET_SPEED_MULTIPLIER
+    start_fuel = player.starting_fuel + player.fuel_level * FUEL_LEVEL_MULTIPLIER
+    #                 start_x,  start_y,     acceleration,
+    #                    |         |         |   boost acceleration,
+    #                    |         |         |   |   maximum speed
+    #                    |         |         |   |   |          start_fuel
+    #                    |         |         |   |   |          |           points for collision
+    #                    |         |         |   |   |          |           |                image
+    #                    |         |         |   |   |          |           |                |
+    rocket = Rocket((WIDTH / 2, HEIGHT / 2), 4, 8, max_speed, start_fuel, collision_points, rocket_image) # Rocket in gameobjects.py
+
+    
+
+
+    background = Background(2 * CHUNK_GEN_RADIUS + 1, debug_font) # Background in background.py
+
+    minimap = MiniMap(player.map_level) # Minimap in gameobjects.py
+
+    clouds = pygame.sprite.Group()
+    clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_0, 1.2))
+    clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_1, 1.15))
+    clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_2, 1.1))
+
+    clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_3, 1.05))
+    clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_4, 1.03))
+    clouds.add(Cloud((random.randint(0, WIDTH),random.randint(0, HEIGHT)), cloud_image_5, 1.01))
+
+
     DEBUG = True
     scale = 1
     run = True
@@ -196,27 +283,12 @@ def play():
 
     while run:
         if game_state == PAUSED:
-            keys = input()
-            for event in pygame.event.get():
-                if event.type == pygame.KEYUP:
-                    if keys[pygame.K_SPACE]:
-                        game_state = PLAYING
-                        break
-                    elif keys[pygame.K_ESCAPE]:
-                        player.save_data()
-                        run = False
-                        break
-                elif event.type == pygame.QUIT:
-                    player.save_data()
-                    run = False
-                    break
-            timer.tick(fps)
+            game_state, run = pause_menu(rocket, background, minimap, chunk_coordinates, collision_group, clouds, wind_strength, scale)
             continue
 
         if first:
             create_objects_for_the_first_time(collision_group, images)
             screen.fill(SKY_COLOR)
-            print(len(collision_group))
 
         # For FPS counter
         real_dt = (time.perf_counter_ns() - time1) / 1_000_000_000 # Because it is in nanoseconds
@@ -235,15 +307,11 @@ def play():
         # Get input from keyboard mouse (HID)
         keys = input()
 
-        time12 = get_time()
-
         collided = check_collisions(player, rocket, collision_group, images)
 
         if collided:
             wind_strength = 0
             wind_timer = 0
-
-        time13 = get_time()
 
         # Draw parallaxed clouds
         for cloud in clouds:
@@ -252,25 +320,15 @@ def play():
         # Update and draw background
         chunk_coordinates = background.update(screen, scale, rocket.screen_center ,ground, DEBUG)
 
-        time14 = get_time()
-
         # Calculate new rocket position and draw the rocket
         rocket.update(screen, dt, scale, keys, player)
         rocket.draw(screen, scale)
-        time15 = get_time()
-
-        time16 = get_time()
 
         # Load and unload objects if they are too far from the rocket.
         objects_load_unload(collision_group, chunk_coordinates, images) # Located in gameobject_scripts.py
 
-        time17 = get_time()
-        
-        minimap.draw_base(screen, rocket.position)
-
-        time18 = get_time()
-
-
+        if player.map_level > 0:
+            minimap.draw_base(screen, rocket.position)
 
         # Go through all objects and move as well as draw them on the screen and on the minimap
         for object in collision_group:
@@ -278,21 +336,11 @@ def play():
                 object.move_towards(rocket.position, rocket.speed, player, dt)
 
             object.update()
-            object.draw(screen, scale, rocket.screen_center)
+            object.draw(screen, rocket.screen_center, scale)
             
             # Draw all objects (fuel, money, obstacles) to the minimap
-            minimap.draw(screen, rocket.position, object, DEBUG)
-        
-
-        time19 = get_time()
-
-        # HERE GO ALL UI ELEMENTS
-        money_and_fuel = debug_font.render(f"Money: {player.money} | Fuel: {round(rocket.fuel,0)}", True, 'black', 'white')
-        screen.blit(money_and_fuel, (WIDTH // 2 - money_and_fuel.get_width() // 2, 0))
-
-        if rocket.disabled > 0:
-            if (rocket.disabled - int(rocket.disabled) < 0.5):
-                    screen.blit(danger, (WIDTH / 2 - danger.get_width() / 2, HEIGHT / 2 - danger.get_height() / 2))
+            if player.map_level > 0:
+                minimap.draw(screen, rocket.position, object, DEBUG)
 
         if wind_timer == 0:
             wind_timer = (random.randint(0, WIND_CHANCE) == 1) * map_value(random.random(), 0,1, WIND_DURATION[0], WIND_DURATION[1])  # 4 seconds of wind
@@ -302,29 +350,16 @@ def play():
         if wind_timer < 0:
             wind_timer = 0
 
-        if wind_timer > 0:
-            wind_timer -= dt
-            rocket.angle += sin(radians(rocket.angle + 90)) * dt * wind_strength
-            rocket.speed = (rocket.speed[0] + wind_strength * dt * 10, rocket.speed[1])
-            if wind_strength < 0:
-                wind_scaled_image = pygame.transform.scale_by(wind_right, scale)
-                arrow_position = world_to_screen_coordinates(rocket.position, rocket.screen_center, scale)
-                arrow_position = (arrow_position[0] + 75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
-                screen.blit(wind_scaled_image, arrow_position)
-                
-            if wind_strength > 0:
-                wind_scaled_image = pygame.transform.scale_by(wind_left, scale)
-                arrow_position = world_to_screen_coordinates(rocket.position, rocket.screen_center, scale)
-                arrow_position = (arrow_position[0] -  75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
-                screen.blit(wind_scaled_image, arrow_position)
+        wind_timer -= dt
+        rocket.angle += sin(radians(rocket.angle + 90)) * dt * wind_strength
+        rocket.speed = (rocket.speed[0] + wind_strength * dt * 10, rocket.speed[1])
 
-
-        time20 = get_time()
+        # HERE GO ALL UI ELEMENTS
+        draw_ui(rocket, wind_strength, scale)
 
         # Calculate the scale 
-        scale = cubic_bezier(0, 0, 50, 0, 100, 100, 50, 100, rocket.air_speed / rocket.max_speed) / 100 + 1
-
-        time21 = get_time()
+        #scale = cubic_bezier(0, 0, 50, 0, 100, 100, 50, 100, rocket.air_speed / rocket.max_speed) / 100 + 1
+        scale = cubic_bezier(0, 0, 50, 0, 100, rocket.max_speed / 20, 50, rocket.max_speed / 20, rocket.air_speed / rocket.max_speed) / 100 + 1
 
         # For debug info
         if not first and DEBUG == True:
@@ -336,50 +371,24 @@ def play():
 
         # Read HID inputs ONLY FOR QUITTING THE GAME
         for event in pygame.event.get():
-            if event.type == pygame.QUIT or keys[pygame.K_ESCAPE]:
-                run = False
-                
-
-            #Pressing the "R" key, resets the rocket
-            if keys[pygame.K_r]:
-                rocket.reset(player)
-                wind_timer = 0
-                wind_strength = 0
+            if event.type == pygame.QUIT:
+                player.save_data()
+                pygame.quit()
+                sys.exit()
 
             if event.type == pygame.KEYUP:
-                if keys[pygame.K_SPACE]:
+                if keys[pygame.K_SPACE] or keys[pygame.K_ESCAPE]:
                     game_state = PAUSED
 
                 elif keys[pygame.K_F1]:
                     DEBUG = not DEBUG
                     rocket.debug = DEBUG
 
-                elif keys[pygame.K_F2]:
-                    print("------NEW------")
-                    print("Fill and input: ", f"{time12 - time1:,}")
-                    print("Check collisions: ", f"{time13 - time12:,}")
-                    print("Update background: ", f"{time14 - time13:,}")
-                    print("Update rocket: ", f"{time15 - time14:,}")
-                    print("Get rocket_position: (probs smth small) ", f"{time16 - time15:,}")
-                    print("Update objects: ", f"{time17 - time16:,}")
-                    print("Draw minimap base: ", f"{time18 - time17:,}")
-                    print("Object movement and minimap draw: ", f"{time19 - time18:,}")
-                    print("Money and fuel display: ",  f"{time20 - time19:,}")
-                    print("Scale calculation: ", f"{time21 - time20:,}")
-                    print("debug settings and display.update():", f"{time22 - time21:,}")
-                    times.append([time12 - time1, time13 - time12, time14 - time13, time15 - time14, time16 - time15, time17 - time16, time18 - time17, time19 - time18, time20 - time19, time21 - time20])
-                    averages = [0 for _ in range(len(times[0]) + 1)]
-                    for x in times:
-                        for index, y in enumerate(x):
-                            averages[index] += y
-                        averages[-1] += sum(x)
-                    for x in range(len(averages)):
-                        averages[x] = averages[x] / len(times)
-                    print("Averages:", {y: f"{int(x):,}" for y,x in enumerate(averages)}, "| Count:", len(times))
-                    #print([time12 - time1, time13 - time12, time14 - time13, time15 - time14, time16 - time15, time17 - time16, time18 - time17, time19 - time18, time20 - time19, time21 - time20, time22 - time21])
-
-
-
+                #Pressing the "R" key, resets the rocket
+                elif keys[pygame.K_r]:
+                    rocket.reset(player)
+                    wind_timer = 0
+                    wind_strength = 0
 
         # Update the screen
         pygame.display.update()
@@ -390,30 +399,96 @@ def play():
         dt = timer.tick(fps) * 0.001
 
 def upgrades():
-    while True:
-        OPTIONS_MOUSE_POS = pygame.mouse.get_pos()
+    print(player.load_data())
+    print(player.max_speed_level)
 
-        screen.fill("white")
+    UPGRADES_TEXT = get_font(45).render("UPGRADES", True, TEXT_HEADER_COLOR)
+    UPGRADES_RECT = UPGRADES_TEXT.get_rect(center=(WIDTH / 2, 50))
 
-        UPGRADES_TEXT = get_font(45).render("UPGRADES", True, "Black")
-        UPGRADES_RECT = UPGRADES_TEXT.get_rect(center=(WIDTH/2, HEIGHT/3))
+
+    bar_amount = 4
+    start_y, stop_y = 200, HEIGHT - 300
+    y_position = range(start_y, stop_y, int((stop_y - start_y) / (bar_amount - 1)))
+
+    MAGNET_STRENGTH_TEXT = get_font(15).render("Magnet strength:", True, TEXT_DEFAULT_COLOR)
+    MAGNET_STRENGTH_RECT = MAGNET_STRENGTH_TEXT.get_rect(midright=(WIDTH / 2 - UPGRADES_BAR_WIDTH / 2, y_position[0]))
+    MAGNET_STRENGTH_BAR = ProgressBarWithSteps((WIDTH / 2, y_position[0]), 
+                                                   left_arrow_default, left_arrow_hover, 
+                                                   right_arrow_default, right_arrow_hover,
+                                                   BAR_COLOR, player.magnet_level, 0, 3, UPGRADES_BAR_WIDTH)
+    
+    ROCKET_SPEED_TEXT = get_font(15).render("Rocket speed:", True, TEXT_DEFAULT_COLOR)
+    ROCKET_SPEED_RECT = ROCKET_SPEED_TEXT.get_rect(midright=(WIDTH / 2 - UPGRADES_BAR_WIDTH / 2, y_position[1]))
+    ROCKET_SPEED_BAR = ProgressBarWithSteps((WIDTH / 2,y_position[1]), 
+                                                left_arrow_default, left_arrow_hover, 
+                                                right_arrow_default, right_arrow_hover,
+                                                BAR_COLOR, player.max_speed_level, 0, 5,  UPGRADES_BAR_WIDTH)
+    
+
+    ROCKET_FUEL_TEXT = get_font(15).render("Rocket fuel:", True, TEXT_DEFAULT_COLOR)
+    ROCKET_FUEL_RECT = ROCKET_FUEL_TEXT.get_rect(midright=(WIDTH / 2 - UPGRADES_BAR_WIDTH / 2, y_position[2]))
+    ROCKET_FUEL_BAR = ProgressBarWithSteps((WIDTH / 2, y_position[2]), 
+                                                left_arrow_default, left_arrow_hover, 
+                                                right_arrow_default, right_arrow_hover,
+                                                BAR_COLOR, player.fuel_level, 0, 5, UPGRADES_BAR_WIDTH)
+    
+    MAP_SIZE_TEXT = get_font(15).render("Map size:", True, TEXT_DEFAULT_COLOR)
+    MAP_SIZE_RECT = MAP_SIZE_TEXT.get_rect(midright=(WIDTH / 2 - UPGRADES_BAR_WIDTH / 2, y_position[3]))
+    MAP_SIZE_BAR = ProgressBarWithSteps((WIDTH / 2, y_position[3]), 
+                                                left_arrow_default, left_arrow_hover, 
+                                                right_arrow_default, right_arrow_hover,
+                                                BAR_COLOR, player.map_level, 0, 7, UPGRADES_BAR_WIDTH)
+
+    BACK = Button((WIDTH/2, HEIGHT - 75), "BACK", get_font(75), TEXT_DEFAULT_COLOR, TEXT_HOVER_COLOR)
+
+    run = True
+
+    while run:
+
+        keys = input()
+        MOUSE_POS = pygame.mouse.get_pos()
+
+        screen.fill(UPGRADES_BACKGROUND_COLOR)
         screen.blit(UPGRADES_TEXT, UPGRADES_RECT)
 
-        UPGRADES_BACK = Button(image=None, pos=(WIDTH/2, HEIGHT/1.5), 
-                            text_input="BACK", font=get_font(75), base_color="Black", hovering_color="Green")
+        BACK.changeColor(MOUSE_POS)
+        BACK.update(screen)
 
-        UPGRADES_BACK.changeColor(OPTIONS_MOUSE_POS)
-        UPGRADES_BACK.update(screen)
+        press = False
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                player.save_data()
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if UPGRADES_BACK.checkForInput(OPTIONS_MOUSE_POS):
-                    main_menu()
+                press = True
+                if BACK.checkForInput(MOUSE_POS):
+                    player.save_data()
+                    run = False
+        if keys[pygame.K_ESCAPE]:
+            player.save_data()
+            run = False
+
+        screen.blit(MAGNET_STRENGTH_TEXT, MAGNET_STRENGTH_RECT)
+        screen.blit(ROCKET_SPEED_TEXT, ROCKET_SPEED_RECT)
+        screen.blit(ROCKET_FUEL_TEXT, ROCKET_FUEL_RECT)
+        screen.blit(MAP_SIZE_TEXT, MAP_SIZE_RECT)
+
+        magnet_level = MAGNET_STRENGTH_BAR.update(screen, MOUSE_POS, press)
+        max_speed_level = ROCKET_SPEED_BAR.update(screen, MOUSE_POS, press)
+        fuel_level = ROCKET_FUEL_BAR.update(screen, MOUSE_POS, press)
+        map_level = MAP_SIZE_BAR.update(screen, MOUSE_POS, press)
+
+        if (player.magnet_level != magnet_level or player.max_speed_level != max_speed_level or
+            player.fuel_level != fuel_level or player.map_level != map_level):
+            player.magnet_level = magnet_level
+            player.max_speed_level = max_speed_level
+            player.fuel_level = fuel_level
+            player.map_level = map_level
 
         pygame.display.update()
+        timer.tick(60)
 
 def main_menu():
     while True:
@@ -421,16 +496,13 @@ def main_menu():
 
         MENU_MOUSE_POS = pygame.mouse.get_pos()
 
-        MENU_TEXT = get_font(100).render("ROCKETMAN", True, "#b68f40")
-        MENU_RECT = MENU_TEXT.get_rect(center=(500, 100))
+        MENU_TEXT = get_font(100).render("ROCKETMAN", True, TEXT_HEADER_COLOR)
+        MENU_RECT = MENU_TEXT.get_rect(center=(WIDTH / 2, 100))
 
         # All avaliable buttons on the screen
-        PLAY_BUTTON = Button(image=pygame.image.load("images/Play Rect.png"), pos=(500, 250), 
-                            text_input="PLAY", font=get_font(70), base_color="#d7fcd4", hovering_color="White")
-        UPGRADES_BUTTON = Button(image=pygame.image.load("images/Upgrades Rect.png"), pos=(500, 400), 
-                            text_input="UPGRADES", font=get_font(70), base_color="#d7fcd4", hovering_color="White")
-        QUIT_BUTTON = Button(image=pygame.image.load("images/Quit Rect.png"), pos=(500, 550), 
-                            text_input="QUIT", font=get_font(70), base_color="#d7fcd4", hovering_color="White")
+        PLAY_BUTTON = Button((WIDTH / 2, 250), "PLAY", get_font(70), TEXT_DEFAULT_COLOR, TEXT_HOVER_COLOR, bg_color=TEXT_BACKGROUND_COLOR)
+        UPGRADES_BUTTON = Button((WIDTH / 2, 400), "UPGRADES", get_font(70), TEXT_DEFAULT_COLOR, TEXT_HOVER_COLOR, bg_color=TEXT_BACKGROUND_COLOR)
+        QUIT_BUTTON = Button((WIDTH / 2, 550), "QUIT", get_font(70), TEXT_DEFAULT_COLOR, TEXT_HOVER_COLOR, bg_color=TEXT_BACKGROUND_COLOR)
 
         screen.blit(MENU_TEXT, MENU_RECT)
 
@@ -453,7 +525,7 @@ def main_menu():
                     sys.exit()
 
         pygame.display.update()
-        timer.tick(fps)
+        timer.tick(60)
 
 main_menu()
 

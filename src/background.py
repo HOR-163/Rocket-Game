@@ -80,7 +80,7 @@ class Background:
         self.DEBUG = True
         self.DEBUG_FONT = DEBUG_FONT
 
-    def update(self, screen, scale, rocket_position: tuple[float, float],ground,  DEBUG):
+    def update(self, screen, scale, rocket_position: tuple[float, float],ground,  DEBUG= False):
         self.DEBUG = DEBUG
 
         chunk_x, chunk_y = world_to_chunk_coordinates(rocket_position)

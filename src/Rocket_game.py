@@ -142,13 +142,13 @@ def draw_ui(rocket, wind_strength, scale):
     if wind_strength < 0:
         wind_scaled_image = pygame.transform.scale_by(wind_right, scale)
         arrow_position = world_to_screen_coordinates(rocket.position, rocket.screen_center, scale)
-        arrow_position = (arrow_position[0] + 75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
+        arrow_position = (arrow_position[0] - 75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
         screen.blit(wind_scaled_image, arrow_position)
         
     if wind_strength > 0:
         wind_scaled_image = pygame.transform.scale_by(wind_left, scale)
         arrow_position = world_to_screen_coordinates(rocket.position, rocket.screen_center, scale)
-        arrow_position = (arrow_position[0] -  75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
+        arrow_position = (arrow_position[0] +  75 * scale - wind_scaled_image.get_width() / 2, arrow_position[1] - wind_scaled_image.get_height() / 2)
         screen.blit(wind_scaled_image, arrow_position)
 
 def pause_menu(rocket, background, minimap,chunk_coordinates, collision_group, clouds, wind_strength, scale):

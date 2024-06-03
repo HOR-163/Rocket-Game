@@ -34,6 +34,7 @@ pygame.display.set_caption("Rocket Game")
 fps = 60
 timer = pygame.time.Clock()
 
+
 # Set some global variables for the rockets
 scale = 1
 
@@ -405,6 +406,8 @@ def upgrades():
     UPGRADES_TEXT = get_font(45).render("UPGRADES", True, TEXT_HEADER_COLOR)
     UPGRADES_RECT = UPGRADES_TEXT.get_rect(center=(WIDTH / 2, 50))
 
+    flash_timer = 0
+    flash_message = None
 
     bar_amount = 4
     start_y, stop_y = 200, HEIGHT - 300
@@ -415,14 +418,14 @@ def upgrades():
     MAGNET_STRENGTH_BAR = ProgressBarWithSteps((WIDTH / 2, y_position[0]), 
                                                    left_arrow_default, left_arrow_hover, 
                                                    right_arrow_default, right_arrow_hover,
-                                                   BAR_COLOR, player.magnet_level, 0, 3, UPGRADES_BAR_WIDTH)
+                                                   BAR_COLOR, player.magnet_level, 0, 4, UPGRADES_BAR_WIDTH, "magnet_level")
     
     ROCKET_SPEED_TEXT = get_font(15).render("Rocket speed:", True, TEXT_DEFAULT_COLOR)
     ROCKET_SPEED_RECT = ROCKET_SPEED_TEXT.get_rect(midright=(WIDTH / 2 - UPGRADES_BAR_WIDTH / 2, y_position[1]))
     ROCKET_SPEED_BAR = ProgressBarWithSteps((WIDTH / 2,y_position[1]), 
                                                 left_arrow_default, left_arrow_hover, 
                                                 right_arrow_default, right_arrow_hover,
-                                                BAR_COLOR, player.max_speed_level, 0, 5,  UPGRADES_BAR_WIDTH)
+                                                BAR_COLOR, player.max_speed_level, 0, 5,  UPGRADES_BAR_WIDTH, "max_speed_level")
     
 
     ROCKET_FUEL_TEXT = get_font(15).render("Rocket fuel:", True, TEXT_DEFAULT_COLOR)
@@ -430,22 +433,51 @@ def upgrades():
     ROCKET_FUEL_BAR = ProgressBarWithSteps((WIDTH / 2, y_position[2]), 
                                                 left_arrow_default, left_arrow_hover, 
                                                 right_arrow_default, right_arrow_hover,
-                                                BAR_COLOR, player.fuel_level, 0, 5, UPGRADES_BAR_WIDTH)
+                                                BAR_COLOR, player.fuel_level, 0, 5, UPGRADES_BAR_WIDTH, "fuel_level")
     
     MAP_SIZE_TEXT = get_font(15).render("Map size:", True, TEXT_DEFAULT_COLOR)
     MAP_SIZE_RECT = MAP_SIZE_TEXT.get_rect(midright=(WIDTH / 2 - UPGRADES_BAR_WIDTH / 2, y_position[3]))
     MAP_SIZE_BAR = ProgressBarWithSteps((WIDTH / 2, y_position[3]), 
                                                 left_arrow_default, left_arrow_hover, 
                                                 right_arrow_default, right_arrow_hover,
-                                                BAR_COLOR, player.map_level, 0, 7, UPGRADES_BAR_WIDTH)
+                                                BAR_COLOR, player.map_level, 0, 7, UPGRADES_BAR_WIDTH, "map_level")
 
     BACK = Button((WIDTH/2, HEIGHT - 75), "BACK", get_font(75), TEXT_DEFAULT_COLOR, TEXT_HOVER_COLOR)
 
     run = True
 
+    UPGRADE_COSTS = {
+        "magnet_level": [10,20,30,40],
+        "max_speed_level": [15,30,45,60,75],
+        "fuel_level": [12, 24, 36, 48, 60],
+        "map_level": [5, 10, 15, 20, 25, 30, 35]
+    }
+
+    def upgrade_stat(stat_name, current_level):
+        if current_level < len(UPGRADE_COSTS[stat_name]):
+            cost = UPGRADE_COSTS[stat_name][current_level]
+            if player.money >= cost:
+                player.money -= cost
+                setattr(player, stat_name, current_level + 1)
+                print(f"{stat_name} upgraded to level {current_level + 1}")
+                flash_message = get_font(30).render(f"{stat_name} upgraded to level {current_level + 1}", True, (255, 255, 255))
+            else:
+                print("Not enough money to upgrade")
+                flash_message = get_font(30).render("Not enough money to upgrade", True, (255, 0, 0))
+        else:
+            print(f"{stat_name} is already at maximum level")
+            flash_message = get_font(30).render(f"{stat_name} is already at maximum level", True, (255, 255, 255))
+        return flash_message
+
+    def update_bars():
+        MAGNET_STRENGTH_BAR.level = player.magnet_level
+        ROCKET_SPEED_BAR.level = player.max_speed_level
+        ROCKET_FUEL_BAR.level = player.fuel_level
+        MAP_SIZE_BAR.level = player.map_level
+
     while run:
 
-        keys = input()
+        keys = pygame.key.get_pressed()
         MOUSE_POS = pygame.mouse.get_pos()
 
         screen.fill(UPGRADES_BACKGROUND_COLOR)
@@ -470,15 +502,33 @@ def upgrades():
             player.save_data()
             run = False
 
+        if flash_message and flash_timer < 60:
+            screen.blit(flash_message, (WIDTH / 2 - flash_message.get_width() / 2, HEIGHT / 2))
+            flash_timer += 1
+        elif flash_timer >= 60:
+            flash_message = None
+            flash_timer = 0
+
         screen.blit(MAGNET_STRENGTH_TEXT, MAGNET_STRENGTH_RECT)
         screen.blit(ROCKET_SPEED_TEXT, ROCKET_SPEED_RECT)
         screen.blit(ROCKET_FUEL_TEXT, ROCKET_FUEL_RECT)
         screen.blit(MAP_SIZE_TEXT, MAP_SIZE_RECT)
 
-        magnet_level = MAGNET_STRENGTH_BAR.update(screen, MOUSE_POS, press)
-        max_speed_level = ROCKET_SPEED_BAR.update(screen, MOUSE_POS, press)
-        fuel_level = ROCKET_FUEL_BAR.update(screen, MOUSE_POS, press)
-        map_level = MAP_SIZE_BAR.update(screen, MOUSE_POS, press)
+        magnet_level = MAGNET_STRENGTH_BAR.update(screen, MOUSE_POS, player, UPGRADE_COSTS, press)
+        if player.magnet_level != magnet_level:
+            flash_message = upgrade_stat("magnet_level", magnet_level)
+
+        max_speed_level = ROCKET_SPEED_BAR.update(screen, MOUSE_POS, player, UPGRADE_COSTS, press)
+        if player.max_speed_level != max_speed_level:
+            flash_message = upgrade_stat("max_speed_level", max_speed_level)
+
+        fuel_level = ROCKET_FUEL_BAR.update(screen, MOUSE_POS, player, UPGRADE_COSTS, press)
+        if player.fuel_level != fuel_level:
+            flash_message = upgrade_stat("fuel_level", fuel_level)
+
+        map_level = MAP_SIZE_BAR.update(screen, MOUSE_POS, player, UPGRADE_COSTS, press)
+        if player.map_level != map_level:
+            flash_message = upgrade_stat("map_level", map_level)
 
         if (player.magnet_level != magnet_level or player.max_speed_level != max_speed_level or
             player.fuel_level != fuel_level or player.map_level != map_level):

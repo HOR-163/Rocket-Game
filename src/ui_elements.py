@@ -63,43 +63,36 @@ class TextlessButton:
 
 
 class ProgressBarWithSteps:
-	def __init__(self, position: tuple[int, int], left_default, left_hover, right_default, right_hover, bar_color, default_value: int, min_value: int, max_value: int, width: int):
-		self.position = position
-		self.left_button = TextlessButton((position[0] - width // 2 + left_default.get_rect().width // 2, position[1]), left_default, left_hover)
-		self.right_button = TextlessButton((position[0] + width // 2 - right_default.get_rect().width // 2, position[1]), right_default, right_hover)
-		self.bar_color = bar_color
-		
-		self.width = width
+    def __init__(self, position: tuple[int, int], left_default, left_hover, right_default, right_hover, bar_color, default_value: int, min_value: int, max_value: int, width: int, stat_name: str):
+        self.position = position
+        self.left_button = TextlessButton((position[0] - width // 2 + left_default.get_rect().width // 2, position[1]), left_default, left_hover)
+        self.right_button = TextlessButton((position[0] + width // 2 - right_default.get_rect().width // 2, position[1]), right_default, right_hover)
+        self.bar_color = bar_color
+        self.width = width
+        self.margin = 10
+        self.bar_width = width - self.left_button.default_rect.width - self.right_button.default_rect.width - 2 * self.margin
+        self.min_value = min_value
+        self.max_value = max_value
+        self.steps = self.max_value - self.min_value
+        self.value = default_value
+        self.stat_name = stat_name  # Add stat_name as an attribute
 
-		self.margin = 10
-
-		self.bar_width = width - self.left_button.default_rect.width - self.right_button.default_rect.width - 2 * self.margin
-
-		self.min_value = min_value
-		self.max_value = max_value
-		self.steps = self.max_value - self.min_value
-		self.value = default_value
-
-	def update(self, screen, position, pressed = False):
-		self.left_button.checkForInput(position)
-		self.right_button.checkForInput(position)
-
-		self.left_button.update(screen)
-		self.right_button.update(screen)
-
-		if pressed:
-			if self.left_button.hover:
-				self.value -= 1
-			elif self.right_button.hover:
-				self.value += 1
-
-		if  self.value < self.min_value:
-			self.value = 0
-		
-		if self.value > self.max_value:
-			self.value = self.max_value
-
-		bar_rect = pygame.Rect(self.left_button.default_rect.right + self.margin, self.left_button.default_rect.top, self.bar_width / self.steps * self.value, self.left_button.default_rect.height)
-		pygame.draw.rect(screen, self.bar_color, bar_rect)
-
-		return self.value
+    def update(self, screen, position, player, UPGRADE_COSTS, pressed = False):
+        self.left_button.checkForInput(position)
+        self.right_button.checkForInput(position)
+        self.left_button.update(screen)
+        self.right_button.update(screen)
+        if pressed:
+            if self.left_button.hover:
+                if self.value > self.min_value and player.money >= UPGRADE_COSTS[self.stat_name][self.value - 1]:
+                    self.value -= 1
+            elif self.right_button.hover:
+                if self.value < self.max_value and player.money >= UPGRADE_COSTS[self.stat_name][self.value]:
+                    self.value += 1
+        if  self.value < self.min_value:
+            self.value = 0
+        if self.value > self.max_value:
+            self.value = self.max_value
+        bar_rect = pygame.Rect(self.left_button.default_rect.right + self.margin, self.left_button.default_rect.top, self.bar_width / self.steps * self.value, self.left_button.default_rect.height)
+        pygame.draw.rect(screen, self.bar_color, bar_rect)
+        return self.value

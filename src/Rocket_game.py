@@ -447,8 +447,8 @@ def upgrades():
     run = True
 
     UPGRADE_COSTS = {
-        "magnet_level": [10,20,30,40],
-        "max_speed_level": [15,30,45,60,75],
+        "magnet_level": [10, 20, 30, 40],
+        "max_speed_level": [15, 30, 45, 60, 75],
         "fuel_level": [12, 24, 36, 48, 60],
         "map_level": [5, 10, 15, 20, 25, 30, 35]
     }
@@ -460,20 +460,38 @@ def upgrades():
                 player.money -= cost
                 setattr(player, stat_name, current_level + 1)
                 print(f"{stat_name} upgraded to level {current_level + 1}")
-                flash_message = get_font(30).render(f"{stat_name} upgraded to level {current_level + 1}", True, (255, 255, 255))
+                return get_font(30).render(f"{stat_name} upgraded to level {current_level + 1}", True, (255, 255, 255))
             else:
                 print("Not enough money to upgrade")
-                flash_message = get_font(30).render("Not enough money to upgrade", True, (255, 0, 0))
+                return get_font(30).render("Not enough money to upgrade", True, (255, 0, 0))
         else:
             print(f"{stat_name} is already at maximum level")
-            flash_message = get_font(30).render(f"{stat_name} is already at maximum level", True, (255, 255, 255))
-        return flash_message
+            return get_font(30).render(f"{stat_name} is already at maximum level", True, (255, 255, 255))
 
     def update_bars():
         MAGNET_STRENGTH_BAR.level = player.magnet_level
         ROCKET_SPEED_BAR.level = player.max_speed_level
         ROCKET_FUEL_BAR.level = player.fuel_level
         MAP_SIZE_BAR.level = player.map_level
+        
+        if player.magnet_level < len(UPGRADE_COSTS["magnet_level"]):
+            MAGNET_COST_TEXT = get_font(15).render(f"Cost: {UPGRADE_COSTS['magnet_level'][player.magnet_level]}", True, TEXT_DEFAULT_COLOR)
+        else:
+            MAGNET_COST_TEXT = get_font(15).render("Max level", True, TEXT_DEFAULT_COLOR)
+        if player.max_speed_level < len(UPGRADE_COSTS["max_speed_level"]):
+            SPEED_COST_TEXT = get_font(15).render(f"Cost: {UPGRADE_COSTS['max_speed_level'][player.max_speed_level]}", True, TEXT_DEFAULT_COLOR)
+        else:
+            SPEED_COST_TEXT = get_font(15).render("Max level", True, TEXT_DEFAULT_COLOR)
+        if player.fuel_level < len(UPGRADE_COSTS["fuel_level"]):
+            FUEL_COST_TEXT = get_font(15).render(f"Cost: {UPGRADE_COSTS['fuel_level'][player.fuel_level]}", True, TEXT_DEFAULT_COLOR)
+        else:
+            FUEL_COST_TEXT = get_font(15).render("Max level", True, TEXT_DEFAULT_COLOR)
+        if player.map_level < len(UPGRADE_COSTS["map_level"]):
+            MAP_COST_TEXT = get_font(15).render(f"Cost: {UPGRADE_COSTS['map_level'][player.map_level]}", True, TEXT_DEFAULT_COLOR)
+        else:
+            MAP_COST_TEXT = get_font(15).render("Max level", True, TEXT_DEFAULT_COLOR)
+
+        return MAGNET_COST_TEXT, SPEED_COST_TEXT, FUEL_COST_TEXT, MAP_COST_TEXT
 
     while run:
 
@@ -502,12 +520,12 @@ def upgrades():
             player.save_data()
             run = False
 
-        if flash_message and flash_timer < 60:
+        if flash_message:
             screen.blit(flash_message, (WIDTH / 2 - flash_message.get_width() / 2, HEIGHT / 2))
             flash_timer += 1
-        elif flash_timer >= 60:
-            flash_message = None
-            flash_timer = 0
+            if flash_timer > 60:
+                flash_message = None
+                flash_timer = 0
 
         screen.blit(MAGNET_STRENGTH_TEXT, MAGNET_STRENGTH_RECT)
         screen.blit(ROCKET_SPEED_TEXT, ROCKET_SPEED_RECT)
@@ -516,26 +534,26 @@ def upgrades():
 
         magnet_level = MAGNET_STRENGTH_BAR.update(screen, MOUSE_POS, player, UPGRADE_COSTS, press)
         if player.magnet_level != magnet_level:
-            flash_message = upgrade_stat("magnet_level", magnet_level)
+            flash_message = upgrade_stat("magnet_level", player.magnet_level)
 
         max_speed_level = ROCKET_SPEED_BAR.update(screen, MOUSE_POS, player, UPGRADE_COSTS, press)
         if player.max_speed_level != max_speed_level:
-            flash_message = upgrade_stat("max_speed_level", max_speed_level)
+            flash_message = upgrade_stat("max_speed_level", player.max_speed_level)
 
         fuel_level = ROCKET_FUEL_BAR.update(screen, MOUSE_POS, player, UPGRADE_COSTS, press)
         if player.fuel_level != fuel_level:
-            flash_message = upgrade_stat("fuel_level", fuel_level)
+            flash_message = upgrade_stat("fuel_level", player.fuel_level)
 
         map_level = MAP_SIZE_BAR.update(screen, MOUSE_POS, player, UPGRADE_COSTS, press)
         if player.map_level != map_level:
-            flash_message = upgrade_stat("map_level", map_level)
+            flash_message = upgrade_stat("map_level", player.map_level)
 
-        if (player.magnet_level != magnet_level or player.max_speed_level != max_speed_level or
-            player.fuel_level != fuel_level or player.map_level != map_level):
-            player.magnet_level = magnet_level
-            player.max_speed_level = max_speed_level
-            player.fuel_level = fuel_level
-            player.map_level = map_level
+        MAGNET_COST_TEXT, SPEED_COST_TEXT, FUEL_COST_TEXT, MAP_COST_TEXT = update_bars()  # Ensure bars and costs are updated with the current player levels
+
+        screen.blit(MAGNET_COST_TEXT, (WIDTH / 2 + UPGRADES_BAR_WIDTH / 2 + 10, y_position[0]))
+        screen.blit(SPEED_COST_TEXT, (WIDTH / 2 + UPGRADES_BAR_WIDTH / 2 + 10, y_position[1]))
+        screen.blit(FUEL_COST_TEXT, (WIDTH / 2 + UPGRADES_BAR_WIDTH / 2 + 10, y_position[2]))
+        screen.blit(MAP_COST_TEXT, (WIDTH / 2 + UPGRADES_BAR_WIDTH / 2 + 10, y_position[3]))
 
         pygame.display.update()
         timer.tick(60)

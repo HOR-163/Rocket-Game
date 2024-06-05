@@ -1,10 +1,10 @@
 {
-    "money": 41440,
+    "money": 0,
     "fuel_level": 0,
     "starting_fuel": 10,
     "starting_speed": 500,
     "magnet_level": 0,
     "map_level": 0,
     "max_speed_level": 0,
-    "deaths": 1000001
+    "deaths": 0
 }

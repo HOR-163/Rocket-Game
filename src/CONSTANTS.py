@@ -20,18 +20,19 @@ SKY_COLOR = (176, 235, 230)
 TEXT_DEFAULT_COLOR = (215, 252, 212)
 TEXT_HOVER_COLOR = (255, 255, 255)
 TEXT_HEADER_COLOR = (182, 143, 64)
-TEXT_BACKGROUND_COLOR = (0,0,0,128)
+TEXT_BACKGROUND_COLOR = (0, 0, 0, 128)
 
-BAR_COLOR = (255,255,255)
+BAR_COLOR = (255, 255, 255)
 UPGRADES_BAR_WIDTH = 500
-UPGRADES_BACKGROUND_COLOR = (128,128,128)
+UPGRADES_BACKGROUND_COLOR = (128, 128, 128)
 
 # Physics constants
 GRAVITY = 4
 GROUND_FRICTION = 0.04
 FALL_SPEED = 2000
 WIND_CHANCE = 1000 # Every frame takes the chance of 1 / n
-WIND_DURATION = [2,4] # [x,y] x to y seconds of wind
+WIND_DURATION = [2, 4] # [x,y] x to y seconds of wind
+MAX_WIND_STRENGTH = 10
 MINIMUM_DISABLED = 1 # Minimum amount of seconds rocket is disabled when going through angry cloud
 MAXIMUM_DISABLED = 3 # Maximum amount of seconds rocket is disabled when going through angry cloud
 
@@ -78,10 +79,12 @@ DEFAULT_PLAYER_DATA = {"money": 0,
                        "map_level": 0,
                        "max_speed_level": 0}
 
-FUEL_UPGRADE_COSTS = {1: 100, 2: 200, 3: 300, 4: 400, 5: 500} # {level: cost, ...}
-MAGNET_UPGRADE_COSTS = {1: 100, 2: 200, 3: 300} # {level: cost, ...}
-ROCKET_SPEED_UPGRADE_COSTS = {1: 100, 2: 200, 3: 300, 4: 400, 5: 500} # {level: cost, ...}
-MAP_UPGRADE_COSTS = {1: 100, 2: 200, 3: 300, 4: 400, 5: 500} # {level: cost, ...}
+UPGRADE_COSTS = {
+    "magnet_level": [10, 20, 30, 40],
+    "max_speed_level": [15, 30, 45, 60, 75],
+    "fuel_level": [12, 24, 36, 48, 60],
+    "map_level": [5, 10, 15, 20, 25, 30, 35]
+}
 
 FUEL_LEVEL_MULTIPLIER = 30
 MAGNET_LEVEL_MULTIPLIER = 100

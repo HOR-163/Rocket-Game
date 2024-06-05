@@ -109,7 +109,7 @@ class Rocket(pygame.sprite.Sprite):
             self.disabled = 0
 
         if self.fuel > 0:
-            self.vertical_input(keys)
+            self.vertical_input(keys, dt)
         
         else:
             self.fuel = 0
@@ -155,12 +155,12 @@ class Rocket(pygame.sprite.Sprite):
                 point.draw(screen, scale, self.image_size, self.image_offset, COLORS[index % 7], self.angle)
     
     def reset(self, player):
-        self.position = (WIDTH / 2, HEIGHT / 2)
+        self.position = (WIDTH / 2, 511)
         self.speed = (0,0)
         self.angle = 0
         self.fuel = player.starting_fuel + player.fuel_level * FUEL_LEVEL_MULTIPLIER
 
-    def vertical_input(self, keys):
+    def vertical_input(self, keys, dt):
         if self.disabled > 0:
             self.speed = (self.speed[0], self.speed[1] + GRAVITY)
             return
@@ -177,7 +177,7 @@ class Rocket(pygame.sprite.Sprite):
                             self.speed[1] + sin(radians(self.angle - 90)) * self.acceleration)
             
         if not keys[pygame.K_s] and not keys[pygame.K_DOWN]:
-            self.fuel -= self.air_speed / 30000
+            self.fuel -= self.air_speed / (480 / dt)
     
     def rotational_input(self, keys, dt):
         if self.disabled > 0:

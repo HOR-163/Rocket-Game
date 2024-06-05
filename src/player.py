@@ -17,7 +17,7 @@ class Player():
         self.deaths = 0
     
     def load_data(self) -> dict:
-        state = 2 # Everything loaded correctly
+        state = 1 # Everything loaded correctly
         reasons = []
         
         try:
@@ -36,7 +36,6 @@ class Player():
             self.map_level = self.default_data["map_level"]
             self.max_speed_level = self.default_data["max_speed_level"]
             self.deaths = 0
-
             return {state: reasons}
 
         self.money = save_data["money"]
@@ -47,6 +46,7 @@ class Player():
         self.map_level = save_data["map_level"]
         self.max_speed_level = save_data["max_speed_level"]
         self.deaths = save_data["deaths"]
+        return {state:[]}
 
     def save_data(self) -> bool:
         data = {"money": self.money,

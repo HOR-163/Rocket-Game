@@ -63,36 +63,72 @@ class TextlessButton:
 
 
 class ProgressBarWithSteps:
-    def __init__(self, position: tuple[int, int], left_default, left_hover, right_default, right_hover, bar_color, default_value: int, min_value: int, max_value: int, width: int, stat_name: str):
-        self.position = position
-        self.left_button = TextlessButton((position[0] - width // 2 + left_default.get_rect().width // 2, position[1]), left_default, left_hover)
-        self.right_button = TextlessButton((position[0] + width // 2 - right_default.get_rect().width // 2, position[1]), right_default, right_hover)
-        self.bar_color = bar_color
-        self.width = width
-        self.margin = 10
-        self.bar_width = width - self.left_button.default_rect.width - self.right_button.default_rect.width - 2 * self.margin
-        self.min_value = min_value
-        self.max_value = max_value
-        self.steps = self.max_value - self.min_value
-        self.value = default_value
-        self.stat_name = stat_name  # Add stat_name as an attribute
+	def __init__(self, position: tuple[int, int], left_default, left_hover, right_default, right_hover, bar_color, default_value: int, min_value: int, max_value: int, width: int):
+		self.position = position
+		self.left_button = TextlessButton((position[0] - width // 2 + left_default.get_rect().width // 2, position[1]), left_default, left_hover)
+		self.right_button = TextlessButton((position[0] + width // 2 - right_default.get_rect().width // 2, position[1]), right_default, right_hover)
+		self.bar_color = bar_color
+		
+		self.width = width
 
-    def update(self, screen, position, player, UPGRADE_COSTS, pressed = False):
-        self.left_button.checkForInput(position)
-        self.right_button.checkForInput(position)
-        self.left_button.update(screen)
-        self.right_button.update(screen)
-        if pressed:
-            if self.left_button.hover:
-                if self.value > self.min_value and player.money >= UPGRADE_COSTS[self.stat_name][self.value - 1]:
-                    self.value -= 1
-            elif self.right_button.hover:
-                if self.value < self.max_value and player.money >= UPGRADE_COSTS[self.stat_name][self.value]:
-                    self.value += 1
-        if  self.value < self.min_value:
-            self.value = 0
-        if self.value > self.max_value:
-            self.value = self.max_value
-        bar_rect = pygame.Rect(self.left_button.default_rect.right + self.margin, self.left_button.default_rect.top, self.bar_width / self.steps * self.value, self.left_button.default_rect.height)
-        pygame.draw.rect(screen, self.bar_color, bar_rect)
-        return self.value
+		self.margin = 10
+
+		self.bar_width = width - self.left_button.default_rect.width - self.right_button.default_rect.width - 2 * self.margin
+
+		self.min_value = min_value
+		self.max_value = max_value
+		self.steps = self.max_value - self.min_value
+		self.value = default_value
+
+	def update(self, screen, position, pressed = False):
+		self.left_button.checkForInput(position)
+		self.right_button.checkForInput(position)
+
+		self.left_button.update(screen)
+		self.right_button.update(screen)
+
+		if pressed:
+			if self.left_button.hover:
+				if self.value != self.min_value:
+					return -1
+			elif self.right_button.hover:
+				if self.value != self.max_value:
+					return 1
+		return 0
+	
+	def draw(self, screen, value):
+		self.value = value
+		bar_rect = pygame.Rect(self.left_button.default_rect.right + self.margin, self.left_button.default_rect.top, self.bar_width / self.steps * self.value, self.left_button.default_rect.height)
+		pygame.draw.rect(screen, self.bar_color, bar_rect)
+
+class Price:
+	def __init__(self, position, image, font, default_color, disabled_color='gray', insufficient_color='red', height=15):
+		self.position = position
+		self.font = font
+		self.default_color = default_color
+		self.disabled_color = disabled_color
+		self.insufficient_color = insufficient_color
+		self.height = height
+
+		self.image = pygame.transform.scale_by(image, self.height / image.get_height())
+		self.image_rect = self.image.get_rect(midleft = self.position)
+
+
+	def draw(self, screen, text_str, state = "default"):
+		if state == "disabled":
+			color = self.disabled_color
+		elif state == "insufficient":
+			color = self.insufficient_color
+		else:
+			color = self.default_color
+
+		if text_str.upper() == "MAX":
+			text = self.font.render(text_str, True, color)
+			text_rect = text.get_rect(midleft = self.position)
+			screen.blit(text, text_rect)
+		else:
+			text = self.font.render(text_str, True, color)
+			screen.blit(self.image, self.image_rect)
+			text_rect = text.get_rect(topleft = (self.image_rect.right + 5, self.image_rect.top))
+			screen.blit(text, text_rect)
+

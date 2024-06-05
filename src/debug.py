@@ -1,6 +1,6 @@
 from math import *
 
-def info(screen, debug_font, rocket, last_speed, chunk_coordinates, scale, dt, highest_dt):
+def info(screen, debug_font, rocket, last_speed, chunk_coordinates, scale, dt):
     x_position, y_position = rocket.position
     x_speed, y_speed = rocket.speed
     x_acc = round((x_speed - last_speed[0]), 3)
@@ -18,7 +18,6 @@ def info(screen, debug_font, rocket, last_speed, chunk_coordinates, scale, dt, h
              debug_font.render(f"Angle: {-angle}", True, 'red', 'white'),
              debug_font.render(f"Scale: {round(scale, 2)}", True, 'black', 'white'),
              debug_font.render(f"FPS: {round(1/(dt), 3)}", True, 'black', 'white'),
-             debug_font.render(f"lowest FPS: {round(1/(highest_dt))}", True, 'black', 'white'), 
              ]
     for index, text in enumerate(texts):
         screen.blit(text, (0, index * 16))
